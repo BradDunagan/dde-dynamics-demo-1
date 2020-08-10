@@ -15,6 +15,8 @@ import dynamics				from './dynamics';
 import Dexter				from './dexter';
 import sim					from './sim';
 
+import JointData			from './joint-data';
+
 import './App.css';
 
 
@@ -67,7 +69,18 @@ class App extends React.Component {
 
 		this.jt	= {};			//	Joint target values.
 
-		this.render3D = this.render3D.bind ( this );
+		this.updateGauges	= this.updateGauges.bind ( this );
+		this.render3D		= this.render3D.bind ( this );
+
+		this.doAll			= this.doAll.bind ( this );
+
+		this.h_count = 0;
+
+		this.fncJoint1Gauges = null;
+		this.fncJoint2Gauges = null;
+		this.fncJoint3Gauges = null;
+		this.fncJoint4Gauges = null;
+		this.fncJoint5Gauges = null;
 
 	}	//	constructor()
 
@@ -159,22 +172,48 @@ class App extends React.Component {
 	}	//	draw_coord_frame()
 
 	resizeRendererToDisplaySize() {
+		let h = this.canvas.parentElement.clientHeight;
+		this.canvas.style.height = h + 'px';
+
 		const pixelRatio = window.devicePixelRatio;
+	//	const pixelRatio = 1;
+
 		const width  = this.canvas.clientWidth  * pixelRatio | 0;
 		const height = this.canvas.clientHeight * pixelRatio | 0;
-		const needResize =    this.canvas.width !== width 
+		
+		const needResize =    this.canvas.width  !== width 
 						   || this.canvas.height !== height;
+
+		this.h_count += 1;
+		if ( this.h_count % 100 === 0 ) {
+			console.log ( 'height: ' + height ); }
+		
 		if ( needResize ) {
 			this.renderer3D.setSize ( width, height, false );
 		}
 		return needResize;
 	}
 
-	doAll ( o ) {
-		const sW = 'App doAll() do: ' + o.do;
-	//	console.log ( sW ); 
-		console.error ( sW + ' - unrecognized' );
-	}	//	doAll()
+	updateGauges ( fncGauges, pos, vel, trq ) {
+		if ( typeof fncGauges !== 'function' ) {
+			return; }
+		let deg = pos * 180 / Math.PI;
+		deg = Math.round ( deg * 10 ) / 10;
+
+		vel = Math.round ( vel * 10 ) / 10;
+
+		let sign = trq < 0 ? -1 : 1;
+		let trqAbs = Math.abs ( trq );
+		let trqLg  = null;
+		trqLg = Math.log10 ( trqAbs + 1 ) * sign;
+		trq   = Math.round ( trq * 10 ) / 10;
+		
+		fncGauges ( { do: 		'set-gauges',
+					  position:	deg,
+					  velocity:	vel,
+					  torque:	trq,
+					  torqueLg:	trqLg } ); 
+	}	//	updateGauges()
 
 	render3D ( time ) {
 	//	time *= 0.001;
@@ -200,39 +239,103 @@ class App extends React.Component {
 	//		console.log ( 'break' ); }
 		let bInverseDynamics = true;
 		let jc = [];		//	Joint current values.
+		let jv = [];		//	Joint velocities.
+		let jt = [];		//	Joint applied torques.
 		dynamics.stepSimulation ( deltaTime, qd, bInverseDynamics, jc,
-								  this.kp, this.kd );
+								  this.kp, this.kd, jv, jt );
 		
 		if ( jc.length > 0 ) {
 			let axis = this.jt['J1'].axis;
-			sim.J1.rotation[axis] = jc[0]; }
+			sim.J1.rotation[axis] = jc[0]; 
+			this.updateGauges ( this.fncJoint1Gauges, jc[0], jv[0], jt[0] ); }
 		if ( jc.length > 1 ) {
 			let axis = this.jt['J2'].axis;
-			sim.J2.rotation[axis] = jc[1]; }
+			sim.J2.rotation[axis] = jc[1]; 
+			this.updateGauges ( this.fncJoint2Gauges, jc[1], jv[1], jt[1] ); }
 		if ( jc.length > 2 ) {
 			let axis = this.jt['J3'].axis;
-			sim.J3.rotation[axis] = jc[2]; }
+			sim.J3.rotation[axis] = jc[2]; 
+			this.updateGauges ( this.fncJoint3Gauges, jc[2], jv[2], jt[2] ); }
 		if ( jc.length > 3 ) {
 			let axis = this.jt['J4'].axis;
-			sim.J4.rotation[axis] = jc[3]; }
+			sim.J4.rotation[axis] = jc[3]; 
+			this.updateGauges ( this.fncJoint4Gauges, jc[3], jv[3], jt[3] ); }
 		if ( jc.length > 4 ) {
 			let axis = this.jt['J5'].axis;
-			sim.J5.rotation[axis] = jc[4]; }
+			sim.J5.rotation[axis] = jc[4]; 
+			this.updateGauges ( this.fncJoint5Gauges, jc[4], jv[4], jt[4] ); }
 	
 		if ( jc.length > 0 ) {
 			this.renderer3D.render ( this.scene, this.camera ); }
 		
-		requestAnimationFrame ( this.render3D );
+		window.requestAnimationFrame ( this.render3D );
+	//	window.setTimeout ( () => {
+	//		window.requestAnimationFrame ( this.render3D );
+	//	}, 1000 );
 	}	//	render3D()
 
+	doAll ( o ) {
+		const sW = 'App doAll() do: ' + o.do;
+		console.log ( sW ); 
+		switch ( o.do ) {
+			case 'set-call-down':
+				switch ( o.what ) {
+					case 'Joint 1':		//	JointData title.
+						this.fncJoint1Gauges = o.fnc;
+						break;
+					case 'Joint 2':
+						this.fncJoint2Gauges = o.fnc;
+						break;
+					case 'Joint 3':
+						this.fncJoint3Gauges = o.fnc;
+						break;
+					case 'Joint 4':
+						this.fncJoint4Gauges = o.fnc;
+						break;
+					case 'Joint 5':
+						this.fncJoint5Gauges = o.fnc;
+						break;
+					default:
+						console.error ( sW + ': unrecognized o.what' );
+				}
+				break;
+				
+			default:
+				console.error ( sW + ': unrecognized do' );
+		}
+		return null;
+	}	//	doAll()
+
 	render() {
+	//				<canvas id = 'd1-canvas'
+	//						style = { { display:	'block',
+	//									width:		'100%',
+	//									height:		'100%' } } />
 		return (
-			<div style = { { margin: 	'0px',
-							 height:	'100%' } } >
-				<canvas id = 'd1-canvas'
-						style = { { display:	'block',
-									width:		'100%',
-									height:		'100%' } } />
+			<div style = { { margin: 			'0px',
+							 height:			'100%',
+							 display:			'grid',
+							 gridTemplateRows:	'300px 1fr' } } >
+				<div style = { { display:				'grid',
+					 gridTemplateColumns: '200px 200px 200px 200px 200px' } } >
+					<JointData title = 'Joint 1'
+							   fncApp = { this.doAll } />
+					<JointData title = 'Joint 2'
+							   fncApp = { this.doAll } />
+					<JointData title = 'Joint 3'
+							   fncApp = { this.doAll } />
+					<JointData title = 'Joint 4'
+							   fncApp = { this.doAll } />
+					<JointData title = 'Joint 5'
+							   fncApp = { this.doAll } />
+				</div>
+				<div style = { { margin: 	'0px',
+								 height:	'100%',
+								 overflow:	'hidden' } } >
+					<canvas id = 'd1-canvas'
+							style = { { display:	'block',
+										width:		'100%' } } />
+				</div>
 			</div>
 		);
 	}	//	render()
@@ -240,6 +343,7 @@ class App extends React.Component {
 	componentDidMount() {
 		const sW = 'App componentDidMount()';
 		console.log ( sW );
+
 
 //		let a = new Ammo().btVector3();
 //		let Ammo = window.Ammo;
@@ -282,13 +386,17 @@ class App extends React.Component {
 		this.camera.position.set ( 2, 2.5, 7 );
 
 		this.controls = new OrbitControls ( this.camera, this.canvas );
-		this.controls.target.set ( 0, 0.5, 0 );
+		this.controls.target.set ( -0.2, 0.5, 0 );
 		this.controls.update();
 
 		this.scene = new THREE.Scene();
 		this.scene.background = new THREE.Color ( 'black' );
 	
+	//	const gui = new GUI();
+	//	const gui = new GUI ( { autoPlace: false } );
+	//	this.canvas.parentElement.append  ( gui.domElement );
 		const gui = new GUI();
+		gui.domElement.id = 'gui';
 
 		function makeXYZGUI ( gui, vector3, name, onChangeFn ) {
 			const folder = gui.addFolder ( name );
@@ -565,7 +673,7 @@ class App extends React.Component {
 		sim.LINK4_width   = Dexter.LINK4_AVERAGE_DIAMETER;
 		sim.LINK4         = this.draw_arm ( sim.J4, sim.LINK4_width, 
 													sim.LINK4_height );
-		this.draw_coord_frame ( sim.J4, 0.25 );
+		this.draw_coord_frame ( sim.J4, 0.20 );
 		this.jt['J4'] = { axis:	'z', value: 0 };
 		jointGUIHelper = new JointGUIHelper ( this, 'J4' );
 		folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J4' );
@@ -580,14 +688,14 @@ class App extends React.Component {
 		sim.LINK5_width   = Dexter.LINK5_AVERAGE_DIAMETER;
 		sim.LINK5         = this.draw_arm ( sim.J5, sim.LINK5_width, 
 													sim.LINK5_height );
-		this.draw_coord_frame ( sim.J5, 0.25 );
+		this.draw_coord_frame ( sim.J5, 0.15 );
 		this.jt['J5'] = { axis:	'y', value: 0 };
 		jointGUIHelper = new JointGUIHelper ( this, 'J5' );
 		folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J5' );
 
 		this.clock = new THREE.Clock();
 
- 		requestAnimationFrame ( this.render3D );
+ 		window.requestAnimationFrame ( this.render3D );
 
 	}	//	componentDidMount()
 

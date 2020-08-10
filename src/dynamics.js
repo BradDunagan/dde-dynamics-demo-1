@@ -441,7 +441,9 @@ let dynamics = ( function() {
 									 qd,			//	joint target values
 									 useInverseModel,
 									 jc,			//	joint current values
-									 kp, kd ) {
+									 kp, kd,
+									 jv,			//	joint velocities
+									 jt ) {			//	joint torques
 
 		if ( ! multiBody ) {
 			return; }
@@ -453,7 +455,7 @@ let dynamics = ( function() {
 		let q			= new Ammo.vecx ( num_dofs );
 		let joint_force	= new Ammo.vecx ( num_dofs );
 		let pd_control	= new Ammo.vecx ( num_dofs );
-
+		
 		//	Compute joint forces from one of two control laws:
 		//	
 		//	1)	"Computed torque" control, which gives perfect, decoupled,
@@ -492,7 +494,11 @@ let dynamics = ( function() {
 				//	Use inverse model: apply joint force corresponding to
 				//	desired acceleration nu.
 				for ( let dof = 0; dof < num_dofs; dof++ ) {
-					multiBody.addJointTorque ( dof, joint_force.get ( dof ) );
+					let vel = qdot.get ( dof );
+					jv.push ( vel );
+					let trq = joint_force.get ( dof );
+					jt.push ( trq );
+					multiBody.addJointTorque ( dof, trq ); 
 				}
 			}
 		}
@@ -529,6 +535,12 @@ let dynamics = ( function() {
 		*/
 		for ( let dof = 0; dof < num_dofs; dof++ ) {
 			jc.push ( multiBody.getJointPos ( dof ) ); }
+
+		Ammo.destroy ( nu );
+		Ammo.destroy ( qdot );
+		Ammo.destroy ( q );
+		Ammo.destroy ( joint_force );
+		Ammo.destroy ( pd_control );
 
 	};	//	stepSimulation()
 
