@@ -38,7 +38,7 @@ let Dexter = ( function() {
 
 	dexter.LEG_LENGTH =	0.152400; //meters  6 inches
 
-		//values in degrees
+	//values in degrees
 	dexter.J1_ANGLE_MIN =	-150;
 	dexter.J1_ANGLE_MAX =	150;
 	dexter.J2_ANGLE_MIN =	-90;
@@ -70,13 +70,15 @@ let Dexter = ( function() {
 	dexter.HOME_POSITION    =	[[0, 0.08255, 0.866775],[0, 1, 0], [1, 1, 1]];//meters, j5 direction, config
 	dexter.NEUTRAL_POSITION =	[[0, 0.5,     0.075],   [0, 0, -1],[1, 1, 1]];   //meters, j5 direction, config
 
-		//	For now.
+	//	For now.
 	dexter.COLOR =			0x505050;
 	dexter.LINK1_MASS =		2.0;
 	dexter.LINK2_MASS =		6.0;
 	dexter.LINK3_MASS =		3.0;
 	dexter.LINK4_MASS =		1.0;
 	dexter.LINK5_MASS =		1.0;
+//	dexter.LINK4_MASS =		0.05;
+//	dexter.LINK5_MASS =		0.05;
 
 	return dexter;
 } )();

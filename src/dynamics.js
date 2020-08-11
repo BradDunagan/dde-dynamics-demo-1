@@ -437,6 +437,12 @@ let dynamics = ( function() {
 
 	};	//	createMultiBody()
 
+	//	This (including the comments) is pretty much copied from Bullet3's 
+	//	InverseDynamicsExample::stepSimulation().
+	//
+	//	The only major difference from the example is that all the parameters
+	//	except deltaTime are of the class instance in the example.
+	//
 	self.stepSimulation = function ( deltaTime,
 									 qd,			//	joint target values
 									 useInverseModel,
@@ -470,6 +476,8 @@ let dynamics = ( function() {
 
 			const qd_dot = 0;
 			const qd_ddot = 0;
+		//	const qd_dot  = 1.0;
+		//	const qd_ddot = 0.1;
 
 			//	pd_control is either desired joint torque for pd control,
 			//	or the feedback contribution to nu.
@@ -480,7 +488,12 @@ let dynamics = ( function() {
 			//	nu is the desired joint acceleration for computed torque 
 			//	control.
 			//	
-			nu.set ( dof,  qd_ddot + pd_control.get ( dof ) );
+		//	nu.set ( dof,  qd_ddot + pd_control.get ( dof ) );
+			let a = qd_ddot + pd_control.get ( dof );
+		//	if ( Math.abs ( a ) > 10 ) {
+		//		a /= 5; }
+			a /= 10;
+			nu.set ( dof,  a );
 		}
 
 		nSteps += 1;
@@ -491,6 +504,7 @@ let dynamics = ( function() {
 			let r = inverseModel.calculateInverseDynamics ( q, qdot, nu, 
 														    joint_force );
 			if ( -1 !== r ) {
+				let anu = [];
 				//	Use inverse model: apply joint force corresponding to
 				//	desired acceleration nu.
 				for ( let dof = 0; dof < num_dofs; dof++ ) {
@@ -499,7 +513,10 @@ let dynamics = ( function() {
 					let trq = joint_force.get ( dof );
 					jt.push ( trq );
 					multiBody.addJointTorque ( dof, trq ); 
+
+					anu.push ( nu.get ( dof ) );
 				}
+			//	console.log ( 'nu: ' + anu );
 			}
 		}
 		else {
@@ -519,20 +536,6 @@ let dynamics = ( function() {
 		world.stepSimulation ( 0.001, 0 );
 		multiBody.forwardKinematics();
 
-		/*
-		if ( nSteps % 100 == 0 ) {
-			printf ( "\n" );
-			btVector3 posLocal ( 0, 0, 0 );
-			btVector3 w = multiBody.localPosToWorld ( -1, posLocal );	//	posWorld
-			printf ( "base    world pos:  %8.4f %8.4f %8.4f\n",
-					 w[0], w[1], w[2] );
-			for ( int i = 0; i < multiBody.getNumLinks(); ++i )	{
-				btVector3 posLocal ( 0, 0, 0 );
-				btVector3 w = multiBody.localPosToWorld ( i, posLocal );	//	posWorld
-				printf ( "link[%d] world pos:  %8.4f %8.4f %8.4f\n",
-						 i, w[0], w[1], w[2] );
-			} }
-		*/
 		for ( let dof = 0; dof < num_dofs; dof++ ) {
 			jc.push ( multiBody.getJointPos ( dof ) ); }
 

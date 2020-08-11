@@ -216,12 +216,6 @@ class App extends React.Component {
 	}	//	updateGauges()
 
 	render3D ( time ) {
-	//	time *= 0.001;
-	//	this.cube.rotation.x = time;
-	//	this.cube.rotation.y = time;
-
-	//	this.renderer3D.render ( this.scene, this.camera );
-
 		if ( this.resizeRendererToDisplaySize() ) {
 			this.camera.aspect =   this.canvas.clientWidth 
 								 / this.canvas.clientHeight;
@@ -269,9 +263,6 @@ class App extends React.Component {
 			this.renderer3D.render ( this.scene, this.camera ); }
 		
 		window.requestAnimationFrame ( this.render3D );
-	//	window.setTimeout ( () => {
-	//		window.requestAnimationFrame ( this.render3D );
-	//	}, 1000 );
 	}	//	render3D()
 
 	doAll ( o ) {
@@ -307,10 +298,6 @@ class App extends React.Component {
 	}	//	doAll()
 
 	render() {
-	//				<canvas id = 'd1-canvas'
-	//						style = { { display:	'block',
-	//									width:		'100%',
-	//									height:		'100%' } } />
 		return (
 			<div style = { { margin: 			'0px',
 							 height:			'100%',
