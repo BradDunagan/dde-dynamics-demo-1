@@ -229,9 +229,8 @@ class App extends React.Component {
 		qd.push ( this.jt['J3'].value );
 		qd.push ( this.jt['J4'].value );
 		qd.push ( this.jt['J5'].value );
-	//	if ( qd[0] !== 0 ) {
-	//		console.log ( 'break' ); }
 		let bInverseDynamics = true;
+	//	let bInverseDynamics = false;
 		let jc = [];		//	Joint current values.
 		let jv = [];		//	Joint velocities.
 		let jt = [];		//	Joint applied torques.

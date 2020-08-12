@@ -238,7 +238,9 @@ let dynamics = ( function() {
 		shape.calculateLocalInertia ( Dexter.LINK5_MASS, linkInertiaDiag );
 		Ammo.destroy ( shape );
 		shape = null;
-		rotParentToCurrent = new Ammo.btQuaternion ( 0, 0, Math.PI / 2, 1 );
+		rotParentToCurrent = new Ammo.btQuaternion();
+		rotParentToCurrent.setRotation ( new Ammo.btVector3 ( 0, 0, 1 ),
+										 Math.PI / 2 );
 		hingeJointAxis = new Ammo.btVector3 ( 0, 1, 0 );
 		multiBody.setupRevolute ( 
 			4,							//	Link index.
@@ -262,8 +264,10 @@ let dynamics = ( function() {
 
 		multiBody.setUseGyroTerm ( false );
 
-		multiBody.setLinearDamping ( 0 );
-		multiBody.setAngularDamping ( 0 );
+	//	multiBody.setLinearDamping ( 0 );
+	//	multiBody.setAngularDamping ( 0 );
+		multiBody.setLinearDamping ( 0.99 );
+		multiBody.setAngularDamping ( 0.99 );
 
 		//	Collisions
 		//
@@ -452,6 +456,9 @@ let dynamics = ( function() {
 									 jt ) {			//	joint torques
 
 		if ( ! multiBody ) {
+			jc.splice ( 0, 0, 0, 0, 0, 0, 0 );
+			jv.splice ( 0, 0, 0, 0, 0, 0, 0 );
+			jt.splice ( 0, 0, 0, 0, 0, 0, 0 );
 			return; }
 
 		let num_dofs = multiBody.getNumDofs();
@@ -482,17 +489,22 @@ let dynamics = ( function() {
 			//	pd_control is either desired joint torque for pd control,
 			//	or the feedback contribution to nu.
 			//
-			pd_control.set ( dof,   kd * (qd_dot - qdot.get ( dof )) 
-								  + kp * (qd[dof] - q.get ( dof )) );
+		//	pd_control.set ( dof,   kd * (qd_dot - qdot.get ( dof )) 
+		//						  + kp * (qd[dof] - q.get ( dof )) );
+
+			let a =   kd * (qd_dot - qdot.get ( dof )) 
+				    + kp * (qd[dof] - q.get ( dof ));
+		//	a /= 20;
+			pd_control.set ( dof, a );
 
 			//	nu is the desired joint acceleration for computed torque 
 			//	control.
 			//	
 		//	nu.set ( dof,  qd_ddot + pd_control.get ( dof ) );
-			let a = qd_ddot + pd_control.get ( dof );
+			a = qd_ddot + pd_control.get ( dof );
 		//	if ( Math.abs ( a ) > 10 ) {
 		//		a /= 5; }
-			a /= 10;
+		//	a /= 10;
 			nu.set ( dof,  a );
 		}
 
@@ -504,7 +516,7 @@ let dynamics = ( function() {
 			let r = inverseModel.calculateInverseDynamics ( q, qdot, nu, 
 														    joint_force );
 			if ( -1 !== r ) {
-				let anu = [];
+			//	let anu = [];
 				//	Use inverse model: apply joint force corresponding to
 				//	desired acceleration nu.
 				for ( let dof = 0; dof < num_dofs; dof++ ) {
@@ -514,7 +526,7 @@ let dynamics = ( function() {
 					jt.push ( trq );
 					multiBody.addJointTorque ( dof, trq ); 
 
-					anu.push ( nu.get ( dof ) );
+			//		anu.push ( nu.get ( dof ) );
 				}
 			//	console.log ( 'nu: ' + anu );
 			}
@@ -525,6 +537,8 @@ let dynamics = ( function() {
 				//	No model: just apply PD control law.
 				multiBody.addJointTorque ( dof, pd_control.get ( dof ) );
 			}
+			jv.splice ( 0, 0, 0, 0, 0, 0, 0 );		//	for now
+			jt.splice ( 0, 0, 0, 0, 0, 0, 0 );		//
 		}
 		
 		if ( ! world ) {
