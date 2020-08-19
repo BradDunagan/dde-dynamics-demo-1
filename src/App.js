@@ -16,6 +16,7 @@ import Dexter				from './dexter';
 import sim					from './sim';
 
 import JointData			from './joint-data';
+import Controls				from './controls';
 
 import './App.css';
 
@@ -76,6 +77,7 @@ class App extends React.Component {
 
 		this.h_count = 0;
 
+		this.fncControls = null;
 		this.fncJoint1Gauges = null;
 		this.fncJoint2Gauges = null;
 		this.fncJoint3Gauges = null;
@@ -270,6 +272,9 @@ class App extends React.Component {
 		switch ( o.do ) {
 			case 'set-call-down':
 				switch ( o.what ) {
+					case 'Controls':
+						this.fncControls = o.fnc;
+						break;
 					case 'Joint 1':		//	JointData title.
 						this.fncJoint1Gauges = o.fnc;
 						break;
@@ -289,6 +294,10 @@ class App extends React.Component {
 						console.error ( sW + ': unrecognized o.what' );
 				}
 				break;
+
+			case 'add-to-scene':
+				this.scene.add ( o.obj );
+				break;
 				
 			default:
 				console.error ( sW + ': unrecognized do' );
@@ -303,7 +312,10 @@ class App extends React.Component {
 							 display:			'grid',
 							 gridTemplateRows:	'300px 1fr' } } >
 				<div style = { { display:				'grid',
-					 gridTemplateColumns: '200px 200px 200px 200px 200px' } } >
+					 gridTemplateColumns:   '114px 182px 182px 182px 182px '
+										  + '182px' } } >
+					<Controls title = 'Controls'
+							  fncApp = { this.doAll } />
 					<JointData title = 'Joint 1'
 							   fncApp = { this.doAll } />
 					<JointData title = 'Joint 2'
