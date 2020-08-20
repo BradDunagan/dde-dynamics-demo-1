@@ -21,9 +21,12 @@ import './controls.css';
 class Controls extends React.Component {
 	constructor ( props ) {
 		super ( props );
-		this.state = { }
+		this.state = {
+			lowResVisible:	true };
 
 		this.clickImportDexter 	= this.clickImportDexter.bind ( this );
+		this.clickHideShowLowResDexter	= 
+							this.clickHideShowLowResDexter.bind ( this );  
 
 		this.doAll				= this.doAll.bind ( this );
 
@@ -62,6 +65,19 @@ class Controls extends React.Component {
 		*/
 
 	}	//	clickImportDexter()
+
+	clickHideShowLowResDexter ( evt ) {
+		const sW = 'Controls clickHideShowLowResDexter()';
+		console.log ( sW );
+
+		let bShow = ! this.state.lowResVisible;
+
+		this.props.fncApp ( { do:		'show-low-res',
+							  bShow:	bShow } );
+
+		this.setState ( { lowResVisible: bShow } );
+
+	}	//	clickHideShowLowResDexter()
 
 
 	doAll ( o ) {
@@ -105,6 +121,14 @@ class Controls extends React.Component {
 							disabled  = { false }
 							onClick   = { this.clickImportDexter } >
 						Import Dexter
+					</button>
+				</div>
+				<div style = { { padding:	'5px' } } >
+					<button className = "controls-general-button controls-button"
+							disabled  = { false }
+							onClick   = { this.clickHideShowLowResDexter } >
+						{ this.state.lowResVisible ? 'Hide Low Res' 
+												   : 'Show Low Res' }
 					</button>
 				</div>
 			</div>

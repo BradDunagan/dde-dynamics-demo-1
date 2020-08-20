@@ -71,6 +71,11 @@ class App extends React.Component {
 		this.jt	= {};			//	Joint target values.
 
 		this.updateGauges	= this.updateGauges.bind ( this );
+
+		this.chainLink		= this.chainLink.bind (this );
+
+		this.getLinks		= this.getLinks.bind ( this );
+
 		this.render3D		= this.render3D.bind ( this );
 
 		this.doAll			= this.doAll.bind ( this );
@@ -84,6 +89,14 @@ class App extends React.Component {
 		this.fncJoint4Gauges = null;
 		this.fncJoint5Gauges = null;
 
+		//	HiRes Dexter
+		this.c0c0 = null;
+		this.base = null;
+		this.link1 = null;
+		this.link2 = null;
+		this.link3 = null;
+		this.link4 = null;
+		this.link5 = null;
 	}	//	constructor()
 
 	draw_legs ( parent, width, length ) {
@@ -217,6 +230,82 @@ class App extends React.Component {
 					  torqueLg:	trqLg } ); 
 	}	//	updateGauges()
 
+	chainLink ( i ) {
+		//	The  previous link (base if i is 0).
+		let linkPrv = this.c0c0.children[i-1];
+		let Lprv = new THREE.Matrix4();
+		Lprv.copy ( linkPrv.matrix );
+
+		let nLprv = new THREE.Matrix4();
+		nLprv.getInverse ( Lprv );
+
+		//	The link's position WRT base.
+		let link = this.c0c0.children[i];
+		let B = new THREE.Matrix4();
+		B.copy ( link.matrix );
+
+		//	The link's position WRT the previous link.
+		let L = nLprv.multiply ( B );
+
+		//	Remove the link from the current object tree.
+		this.c0c0.children.splice ( i, 1 );
+
+		//	Add it as a child to the previous link.
+		link.matrix.identity();
+		linkPrv.add ( link );
+
+		//	Set it's position.
+		let p = new THREE.Vector3();
+		let q = new THREE.Quaternion();
+		let s = new THREE.Vector3();
+		L.decompose ( p, q, s );
+		link.position.set ( p.x, p.y, p.z );
+		link.setRotationFromQuaternion ( q );
+	}	//	chainLink()
+
+	getLinks ( grp ) {
+		let c0    = grp.children[0];
+		this.c0c0  = c0.children[0];
+		this.base  = this.c0c0.children[0];
+		this.link1 = this.c0c0.children[1];
+		this.link2 = this.c0c0.children[2];
+		this.link3 = this.c0c0.children[3];
+		this.link4 = this.c0c0.children[4];
+		this.link5 = this.c0c0.children[5];
+
+
+	//	let L1 = new THREE.Matrix4();
+	//	L1.copy ( this.link1.matrix );
+	//
+	//	let nL = new THREE.Matrix4();
+	//	nL.getInverse ( L1 );
+	//
+	//	let B = new THREE.Matrix4();
+	//	B.copy ( this.link2.matrix );
+	//
+	//	let L2 = nL.multiply ( B );
+	//
+	//	this.c0c0.children.splice ( 2, 1 );
+	//
+	//	this.link2.matrix.identity();
+	//	this.link1.add ( this.link2 );
+	//
+	//	let p = new THREE.Vector3();
+	//	let q = new THREE.Quaternion();
+	//	let s = new THREE.Vector3();
+	//	L2.decompose ( p, q, s );
+	//	this.link2.position.set ( p.x, p.y, p.z );
+	//	this.link2.setRotationFromQuaternion ( q );
+		this.chainLink ( 7 );
+		this.chainLink ( 6 );
+		this.chainLink ( 5 );
+		this.chainLink ( 4 );
+		this.chainLink ( 3 );
+		this.chainLink ( 2 );
+		this.chainLink ( 1 );
+
+	}	//	getLinks()
+
 	render3D ( time ) {
 		if ( this.resizeRendererToDisplaySize() ) {
 			this.camera.aspect =   this.canvas.clientWidth 
@@ -242,22 +331,32 @@ class App extends React.Component {
 		if ( jc.length > 0 ) {
 			let axis = this.jt['J1'].axis;
 			sim.J1.rotation[axis] = jc[0]; 
+			if ( this.link1 ) {
+				this.link1.rotation[axis] = jc[0]; }
 			this.updateGauges ( this.fncJoint1Gauges, jc[0], jv[0], jt[0] ); }
 		if ( jc.length > 1 ) {
 			let axis = this.jt['J2'].axis;
 			sim.J2.rotation[axis] = jc[1]; 
+			if ( this.link2 ) {
+				this.link2.rotation[axis] = jc[1]; }
 			this.updateGauges ( this.fncJoint2Gauges, jc[1], jv[1], jt[1] ); }
 		if ( jc.length > 2 ) {
 			let axis = this.jt['J3'].axis;
 			sim.J3.rotation[axis] = jc[2]; 
+			if ( this.link3 ) {
+				this.link3.rotation[axis] = jc[2]; }
 			this.updateGauges ( this.fncJoint3Gauges, jc[2], jv[2], jt[2] ); }
 		if ( jc.length > 3 ) {
 			let axis = this.jt['J4'].axis;
 			sim.J4.rotation[axis] = jc[3]; 
+			if ( this.link4 ) {
+				this.link4.rotation[axis] = jc[3]; }
 			this.updateGauges ( this.fncJoint4Gauges, jc[3], jv[3], jt[3] ); }
 		if ( jc.length > 4 ) {
 			let axis = this.jt['J5'].axis;
 			sim.J5.rotation[axis] = jc[4]; 
+			if ( this.link5 ) {
+				this.link5.rotation[axis] = jc[4]; }
 			this.updateGauges ( this.fncJoint5Gauges, jc[4], jv[4], jt[4] ); }
 	
 		if ( jc.length > 0 ) {
@@ -297,6 +396,12 @@ class App extends React.Component {
 
 			case 'add-to-scene':
 				this.scene.add ( o.obj );
+				this.renderer3D.render ( this.scene, this.camera ); 
+				this.getLinks ( o.obj );
+				break;
+
+			case 'show-low-res':
+				sim.J0.visible = o.bShow;
 				break;
 				
 			default:
@@ -388,7 +493,7 @@ class App extends React.Component {
 		this.controls.update();
 
 		this.scene = new THREE.Scene();
-		this.scene.background = new THREE.Color ( 'black' );
+		this.scene.background = new THREE.Color ( 'darkgreen' );
 	
 	//	const gui = new GUI();
 	//	const gui = new GUI ( { autoPlace: false } );
