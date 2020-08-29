@@ -51,22 +51,31 @@ class App extends React.Component {
 
 		this.scene	= null;
 
-		this.cube	= null;
+		this.ground = null;
+		this.block  = null;
 
 		this.light	= null;
 
 		this.clock	= null;
 
+		this.createGround		= this.createGround.bind ( this );
+		this.createBlock		= this.createBlock.bind ( this );
+		this.createCop			= this.createCop.bind ( this );
+
 		this.draw_legs 			= this.draw_legs.bind ( this );
 		this.draw_arm			= this.draw_arm.bind ( this );
 		this.draw_coord_frame	= this.draw_coord_frame.bind ( this );
+
+		this.runScript			= this.runScript.bind ( this );
 		this.resizeRendererToDisplaySize
 							= this.resizeRendererToDisplaySize.bind ( this );
 
 	//	this.kp =  100;			//	Spring
-		this.kp = 6500;			//	Spring
+	//	this.kp = 6500;			//	Spring
+		this.kp =  400;			//	Spring
 	//	this.kd =   20;			//	Damping
-		this.kd =  150;			//	Damping
+	//	this.kd =  150;			//	Damping
+		this.kd =   80;			//	Damping
 
 		this.jt	= {};			//	Joint target values.
 
@@ -97,8 +106,58 @@ class App extends React.Component {
 		this.link3 = null;
 		this.link4 = null;
 		this.link5 = null;
+
+		//	To debug collisions.
+		//	Collision Object Positions
+		this.cops	= {};
+		
+		//	Velocity Zero Callback. For running "scripts".
+		this.v0CB		= null;
+		//	Try to average the velocities across multiple frames.
+		this.jvAbsMax	= [];
+
 	}	//	constructor()
 
+	createGround ( parent ) {
+		dynamics.createGround();
+		const geo = new THREE.BoxGeometry ( 4, 4, 4 ); 
+		const mat = new THREE.MeshPhongMaterial ( { color: '#8AC' } );
+		let ground = new THREE.Mesh ( geo, mat );
+			ground.castShadow = true;
+			ground.position.y = -2.01;
+			ground.visible = false;		//	For now. Use the checker board.
+		parent.add ( ground );
+		return ground;
+	}	//	createGround()
+
+	createBlock ( name, parent, w, l, h ) {
+		dynamics.createBlock ( name, w, l, h );
+		const geo = new THREE.BoxGeometry ( w, h, l );
+	//	const mat = new THREE.MeshPhongMaterial ( { color: '#8AC' } );
+		const mat = new THREE.MeshPhongMaterial ( { color: '#683' } );
+		let block = new THREE.Mesh ( geo, mat );
+			block.castShadow = true;
+		parent.add ( block );
+		return block;
+	}	//	createBlock()
+
+	createCop ( parent, w, l, h ) {
+		w += 0.005;
+		l += 0.005;
+		h += 0.005;
+		const geo		= new THREE.BoxGeometry ( w, h, l );
+		const wireframe	= new THREE.WireframeGeometry ( geo );
+		const lines		= new THREE.LineSegments ( wireframe );
+		let mat	= lines.material;
+		//	mat.color		= new THREE.Color ( 1, 0, 0 );
+			mat.color		= new THREE.Color ( 1, 1, 1 );
+			mat.depthText	= false;
+			mat.opacity		= 0.25;
+			mat.transparent	= true;
+		parent.add ( lines );
+		return lines;;
+	}	//	createCop()
+	
 	draw_legs ( parent, width, length ) {
 		const legGeo = new THREE.BoxGeometry ( length, width, width );
 	//	const legMat = new THREE.MeshPhongMaterial ( { color: '#8AC' } );
@@ -185,6 +244,62 @@ class App extends React.Component {
 		mtxCon.setPosition ( vec.multiplyScalar ( scale ) );
 		arrow ( 0x0000FF, mtxCyl, mtxCon );
 	}	//	draw_coord_frame()
+
+	runScript ( o ) {
+		const sW = 'App runScript()';
+		console.log ( sW );
+		
+		let j1 = this.jt['J1'].ctrl;
+		let j2 = this.jt['J2'].ctrl;
+		let j3 = this.jt['J3'].ctrl;
+		let j4 = this.jt['J4'].ctrl;
+		let j5 = this.jt['J5'].ctrl;
+
+		let script = [
+			{ j1:  40, 	j2:  74,	j3:  76,	j4:  48,  j5: -80,	v0: 0.2 },
+			{ j1:  32,  											v0: 0.20 },
+			{ j1:  30,  											v0: 0.08 },
+			{ j1:  28,  											v0: 0.08 },
+			{ j1:  26,  											v0: 0.08 },
+			{ j1:  24,  											v0: 0.08 },
+			{ j1:  22,  											v0: 0.08 },
+			{ j1:  20,  											v0: 0.08 },
+			{ j1:  18,  											v0: 0.08 },
+			{ j1:  16,  											v0: 0.08 },
+			{ j1:  14,  											v0: 0.08 },
+			{ 			j2:  56, 	j3:  123,						v0: 0.2 },
+			{ j1: -20, 							j4:  4,	  j5: 143,	v0: 0.08 },
+			{ 			j2:  80, 	j3:  90,						v0: 0.08 },
+			{ 			j2:  82,	j3:  84,	j4:  8,   j5: 130,	v0: 0.08 },
+			{ 						j3:  76,						v0: 0.08 },
+			{ 			j2:  56, 	j3:  123,						v0: 0.08 },
+			{ j1:   0,  											v0: 0.20 } ];
+
+		let self = this;
+		let is = 0;
+
+		function next() {
+			if ( is >= script.length ) {
+				self.v0CB = null;
+				return; }
+			let s = script[is];
+			if ( s.j1 ) {
+				j1.setValue ( s.j1 ); }
+			if ( s.j2 ) {
+				j2.setValue ( s.j2 ); }
+			if ( s.j3 ) {
+				j3.setValue ( s.j3 ); }
+			if ( s.j4 ) {
+				j4.setValue ( s.j4 ); }
+			if ( s.j5 ) {
+				j5.setValue ( s.j5 ); }
+			self.v0CB = { is: is, v0: s.v0, cb: next } 
+			self.jvAbsMax = [];
+			is += 1;
+		}
+
+		next();
+	}	//	runScript()
 
 	resizeRendererToDisplaySize() {
 		let h = this.canvas.parentElement.clientHeight;
@@ -307,6 +422,8 @@ class App extends React.Component {
 	}	//	getLinks()
 
 	render3D ( time ) {
+		const sW = 'App render3D()';
+
 		if ( this.resizeRendererToDisplaySize() ) {
 			this.camera.aspect =   this.canvas.clientWidth 
 								 / this.canvas.clientHeight;
@@ -325,44 +442,125 @@ class App extends React.Component {
 		let jc = [];		//	Joint current values.
 		let jv = [];		//	Joint velocities.
 		let jt = [];		//	Joint applied torques.
+		let ground = {};
+		let blocks = [];
 		dynamics.stepSimulation ( deltaTime, qd, bInverseDynamics, jc,
-								  this.kp, this.kd, jv, jt );
+								  this.kp, this.kd, jv, jt, ground, blocks );
 		
+		let jvAbsMax = 0;
+
 		if ( jc.length > 0 ) {
 			let axis = this.jt['J1'].axis;
 			sim.J1.rotation[axis] = jc[0]; 
 			if ( this.link1 ) {
 				this.link1.rotation[axis] = jc[0]; }
+			let a = Math.abs ( jv[0] );
+			if ( a > jvAbsMax ) {
+				jvAbsMax = a; }
 			this.updateGauges ( this.fncJoint1Gauges, jc[0], jv[0], jt[0] ); }
 		if ( jc.length > 1 ) {
 			let axis = this.jt['J2'].axis;
 			sim.J2.rotation[axis] = jc[1]; 
 			if ( this.link2 ) {
 				this.link2.rotation[axis] = jc[1]; }
+			let a = Math.abs ( jv[1] );
+			if ( a > jvAbsMax ) {
+				jvAbsMax = a; }
 			this.updateGauges ( this.fncJoint2Gauges, jc[1], jv[1], jt[1] ); }
 		if ( jc.length > 2 ) {
 			let axis = this.jt['J3'].axis;
 			sim.J3.rotation[axis] = jc[2]; 
 			if ( this.link3 ) {
 				this.link3.rotation[axis] = jc[2]; }
+			let a = Math.abs ( jv[2] );
+			if ( a > jvAbsMax ) {
+				jvAbsMax = a; }
 			this.updateGauges ( this.fncJoint3Gauges, jc[2], jv[2], jt[2] ); }
 		if ( jc.length > 3 ) {
 			let axis = this.jt['J4'].axis;
 			sim.J4.rotation[axis] = jc[3]; 
 			if ( this.link4 ) {
 				this.link4.rotation[axis] = jc[3]; }
+			let a = Math.abs ( jv[3] );
+			if ( a > jvAbsMax ) {
+				jvAbsMax = a; }
 			this.updateGauges ( this.fncJoint4Gauges, jc[3], jv[3], jt[3] ); }
 		if ( jc.length > 4 ) {
 			let axis = this.jt['J5'].axis;
 			sim.J5.rotation[axis] = jc[4]; 
 			if ( this.link5 ) {
 				this.link5.rotation[axis] = jc[4]; }
+			let a = Math.abs ( jv[4] );
+			if ( a > jvAbsMax ) {
+				jvAbsMax = a; }
 			this.updateGauges ( this.fncJoint5Gauges, jc[4], jv[4], jt[4] ); }
-	
+
+		let self = this;
+		if ( self.ground && ground.ammoQ && ground.ammoP ) {
+			let q = new THREE.Quaternion();
+			let a = ground.ammoQ.getAxis();
+			let v = new THREE.Vector3 ( a.x(), a.y(), a.z() );
+			q.setFromAxisAngle ( v, ground.ammoQ.getAngle() ); 
+			let p = new THREE.Vector3 ( ground.ammoP.x(), 
+										ground.ammoP.y(), 
+										ground.ammoP.z() );
+			self.ground.position.set ( p.x, p.y, p.z );
+			self.ground.setRotationFromQuaternion ( q ); }
+		blocks.forEach ( b => {
+			let q = new THREE.Quaternion();
+			let a = b.ammoQ.getAxis();
+			let v = new THREE.Vector3 ( a.x(), a.y(), a.z() );
+			q.setFromAxisAngle ( v, b.ammoQ.getAngle() ); 
+			let p = new THREE.Vector3 ( b.ammoP.x(), b.ammoP.y(), b.ammoP.z() );
+			//	Assume one block. For now.
+			if ( self.block ) {
+				self.block.position.set ( p.x, p.y, p.z );
+				self.block.setRotationFromQuaternion ( q ); } } );
+		
+		dynamics.getCollisionObjectPositions().forEach ( cop => {
+			let obj = self.cops[cop.name];
+			if ( ! obj ) {
+				obj = self.createCop ( self.scene, cop.w, cop.l, cop.h );
+				self.cops[cop.name] = obj; }
+			let q = new THREE.Quaternion();
+			let v = new THREE.Vector3 ( cop.qx, cop.qy, cop.qz );
+			q.setFromAxisAngle ( v, cop.qa );
+			obj.position.set ( cop.px, cop.py, cop.pz );
+			obj.setRotationFromQuaternion ( q ); 
+			if ( cop.name === 'block-a' ) {
+				if ( self.block ) {
+					self.block.position.set ( cop.px, cop.py, cop.pz );
+					self.block.setRotationFromQuaternion ( q ); } }
+		} );
+
 		if ( jc.length > 0 ) {
 			this.renderer3D.render ( this.scene, this.camera ); }
 		
-		window.requestAnimationFrame ( this.render3D );
+		//	To slow things down, lesson the log, for debugging set this 
+		//	timeout delay to non-0.
+		window.setTimeout ( () => {
+			window.requestAnimationFrame ( this.render3D );
+		}, 0 );
+
+		if (  this.jvAbsMax.length < 10 ) {
+			this.jvAbsMax.push ( jvAbsMax ); }
+		else {
+			this.jvAbsMax.shift();
+			this.jvAbsMax.push ( jvAbsMax ); 
+			if ( this.v0CB ) {
+			//	let avg = 0;
+			//	this.jvAbsMax.forEach ( v => avg += v );
+			//	avg /= this.jvAbsMax.length;
+			//	if ( avg <= this.v0CB.v0 ) {
+				let max = 0;
+				this.jvAbsMax.forEach ( v => { 
+					if ( v > max ) {
+						max = v; } } );
+				console.log ( sW + ': is ' + this.v0CB.is
+								 + '  max ' + max 
+								 + '  v0 ' + this.v0CB.v0 );
+				if ( max <= this.v0CB.v0 ) {
+					this.v0CB.cb(); } } }
 	}	//	render3D()
 
 	doAll ( o ) {
@@ -392,6 +590,10 @@ class App extends React.Component {
 					default:
 						console.error ( sW + ': unrecognized o.what' );
 				}
+				break;
+
+			case 'run-script':
+				this.runScript ( o );
 				break;
 
 			case 'add-to-scene':
@@ -454,6 +656,7 @@ class App extends React.Component {
 //			Ammo = window.Ammo;
 //			let a = new Ammo.btVector3()
 //		} );
+		let self = this;
 		dynamics.init().then ( status => {
 			console.log ( sW + ': dynamics status: ' + status );
 
@@ -466,6 +669,11 @@ class App extends React.Component {
 		//	console.log ( sW + ': a ' + a );
 
 			dynamics.createMultiBody();
+
+			self.ground = self.createGround ( self.scene );
+
+			self.block = self.createBlock ( 'block-a', 
+											self.scene, 0.3, 0.3, 0.3 );
 
 		} );
 
@@ -489,7 +697,7 @@ class App extends React.Component {
 		this.camera.position.set ( 2, 2.5, 7 );
 
 		this.controls = new OrbitControls ( this.camera, this.canvas );
-		this.controls.target.set ( -0.2, 0.5, 0 );
+		this.controls.target.set ( -0.3, 0.3, 0 );
 		this.controls.update();
 
 		this.scene = new THREE.Scene();
@@ -685,9 +893,11 @@ class App extends React.Component {
 		let folder = gui.addFolder ( 'Kp, Kd' );
 		folder.open();
 		kpkdGUIHelper = new KPKDGUIHelper ( this, 'kp' );
-		folder.add ( kpkdGUIHelper, 'k', 0, 8000, 80 ).name ( 'Kp' );
+	//	folder.add ( kpkdGUIHelper, 'k', 0, 1000, 700 ).name ( 'Kp' );
+		folder.add ( kpkdGUIHelper, 'k', 0, 1000, 1 ).name ( 'Kp' );
 		kpkdGUIHelper = new KPKDGUIHelper ( this, 'kd' );
-		folder.add ( kpkdGUIHelper, 'k', 0, 1000, 10 ).name ( 'Kd' );
+	//	folder.add ( kpkdGUIHelper, 'k', 0,  100,  80 ).name ( 'Kd' );
+		folder.add ( kpkdGUIHelper, 'k', 0,  100,  1 ).name ( 'Kd' );
 
 
 		class JointGUIHelper {
@@ -726,6 +936,7 @@ class App extends React.Component {
 		folder = gui.addFolder ( 'Joint Targets' );
 		folder.open();
 		let jointGUIHelper = null;
+		let ctrl = null;
 
 		sim.J1 = new THREE.Object3D();
 		sim.J1.position.y  = 0.1;
@@ -735,9 +946,10 @@ class App extends React.Component {
 		sim.LINK1         = this.draw_arm ( sim.J1, sim.LINK1_width, 
 													sim.LINK1_height );
 		this.draw_coord_frame ( sim.J1, 0.25 );
-		this.jt['J1'] = { axis:	'y', value: 0 };
+		this.jt['J1'] = { axis:	'y', value: 0, ctrl: null };
 		jointGUIHelper = new JointGUIHelper ( this, 'J1' );
-		folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J1' );
+		ctrl = folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J1' );
+		this.jt['J1'].ctrl = ctrl;
 
 		//	Joint 2
 		//
@@ -751,7 +963,8 @@ class App extends React.Component {
 		this.draw_coord_frame ( sim.J2, 0.25 );
 		this.jt['J2'] = { axis:	'z', value: 0 };
 		jointGUIHelper = new JointGUIHelper ( this, 'J2' );
-		folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J2' );
+		ctrl = folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J2' );
+		this.jt['J2'].ctrl = ctrl;
 
 		//	Joint 3
 		//
@@ -765,7 +978,8 @@ class App extends React.Component {
 		this.draw_coord_frame ( sim.J3, 0.25 );
 		this.jt['J3'] = { axis:	'z', value: 0 };
 		jointGUIHelper = new JointGUIHelper ( this, 'J3' );
-		folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J3' );
+		ctrl = folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J3' );
+		this.jt['J3'].ctrl = ctrl;
 
 		//	Joint 4
 		//
@@ -779,7 +993,8 @@ class App extends React.Component {
 		this.draw_coord_frame ( sim.J4, 0.20 );
 		this.jt['J4'] = { axis:	'z', value: 0 };
 		jointGUIHelper = new JointGUIHelper ( this, 'J4' );
-		folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J4' );
+		ctrl = folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J4' );
+		this.jt['J4'].ctrl = ctrl;
 
 		//	Joint 5
 		//	
@@ -794,7 +1009,8 @@ class App extends React.Component {
 		this.draw_coord_frame ( sim.J5, 0.15 );
 		this.jt['J5'] = { axis:	'y', value: 0 };
 		jointGUIHelper = new JointGUIHelper ( this, 'J5' );
-		folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J5' );
+		ctrl = folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J5' );
+		this.jt['J5'].ctrl = ctrl;
 
 		this.clock = new THREE.Clock();
 

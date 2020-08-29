@@ -24,6 +24,7 @@ class Controls extends React.Component {
 		this.state = {
 			lowResVisible:	true };
 
+		this.clickRunScript		= this.clickRunScript.bind ( this );
 		this.clickImportDexter 	= this.clickImportDexter.bind ( this );
 		this.clickHideShowLowResDexter	= 
 							this.clickHideShowLowResDexter.bind ( this );  
@@ -33,10 +34,15 @@ class Controls extends React.Component {
 	}	//	constructor()
 
 
+	clickRunScript ( evt ) {
+		const sW = 'Controls clickRunScript()';
+		console.log ( sW );
+		this.props.fncApp ( { do:	'run-script' } );
+	}	//	clickRunScript()
+
 	clickImportDexter ( evt ) {
 		const sW = 'Controls clickImportDexter()';
 		console.log ( sW );
-
 		const gltfLoader = new GLTFLoader();
 		const url = 'HDIMeterModel.gltf';
 		gltfLoader.load ( url, ( gltf ) => {
@@ -52,7 +58,6 @@ class Controls extends React.Component {
 			this.props.fncApp ( { do:	'add-to-scene',
 								  obj:	root			} );
 		} );
-
 		/*
 		const fbxLoader = new FBXLoader();
 		const url = 'HDIMeterModel.fbx';
@@ -63,7 +68,6 @@ class Controls extends React.Component {
 		//	scene.add(root); 
 		} );
 		*/
-
 	}	//	clickImportDexter()
 
 	clickHideShowLowResDexter ( evt ) {
@@ -115,6 +119,13 @@ class Controls extends React.Component {
 				<div style = { { padding:	'2px',
 								 textAlign:	'center' } } >
 					{ this.props.title }
+				</div>
+				<div style = { { padding:	'5px' } } >
+					<button className = "controls-general-button controls-button"
+							disabled  = { false }
+							onClick   = { this.clickRunScript } >
+						Run Script
+					</button>
 				</div>
 				<div style = { { padding:	'5px' } } >
 					<button className = "controls-general-button controls-button"
