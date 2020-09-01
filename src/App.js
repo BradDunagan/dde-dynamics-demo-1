@@ -52,13 +52,14 @@ class App extends React.Component {
 		this.scene	= null;
 
 		this.ground = null;
-		this.block  = null;
+		this.blocks	= {};
 
 		this.light	= null;
 
 		this.clock	= null;
 
 		this.createGround		= this.createGround.bind ( this );
+		this.createBlocks		= this.createBlocks.bind ( this );
 		this.createBlock		= this.createBlock.bind ( this );
 		this.createCop			= this.createCop.bind ( this );
 
@@ -67,6 +68,7 @@ class App extends React.Component {
 		this.draw_coord_frame	= this.draw_coord_frame.bind ( this );
 
 		this.runScript			= this.runScript.bind ( this );
+		this.cycleBoundingBox	= this.cycleBoundingBox.bind ( this );
 		this.resizeRendererToDisplaySize
 							= this.resizeRendererToDisplaySize.bind ( this );
 
@@ -79,15 +81,16 @@ class App extends React.Component {
 
 		this.jt	= {};			//	Joint target values.
 
-		this.updateGauges	= this.updateGauges.bind ( this );
+		this.updateGauges		= this.updateGauges.bind ( this );
 
-		this.chainLink		= this.chainLink.bind (this );
+		this.chainLink			= this.chainLink.bind (this );
+		this.gatherBoundingBoxes	= this.gatherBoundingBoxes.bind ( this );
+		this.createBoundingBox	= this.createBoundingBox.bind ( this );
+		this.getLinks			= this.getLinks.bind ( this );
 
-		this.getLinks		= this.getLinks.bind ( this );
+		this.render3D			= this.render3D.bind ( this );
 
-		this.render3D		= this.render3D.bind ( this );
-
-		this.doAll			= this.doAll.bind ( this );
+		this.doAll				= this.doAll.bind ( this );
 
 		this.h_count = 0;
 
@@ -100,12 +103,12 @@ class App extends React.Component {
 
 		//	HiRes Dexter
 		this.c0c0 = null;
-		this.base = null;
-		this.link1 = null;
-		this.link2 = null;
-		this.link3 = null;
-		this.link4 = null;
-		this.link5 = null;
+	//	this.base = null;
+	//	this.link1 = null;
+	//	this.link2 = null;
+	//	this.link3 = null;
+	//	this.link4 = null;
+	//	this.link5 = null;
 
 		//	To debug collisions.
 		//	Collision Object Positions
@@ -116,11 +119,18 @@ class App extends React.Component {
 		//	Try to average the velocities across multiple frames.
 		this.jvAbsMax	= [];
 
+		this.HiResBBs 	= [];
+		this.HiResBB	= null;
+		this.iHiResBB	= 0;
+		
+		this.bHiResMoveEnabled	= true;
+
 	}	//	constructor()
 
 	createGround ( parent ) {
-		dynamics.createGround();
-		const geo = new THREE.BoxGeometry ( 4, 4, 4 ); 
+		let w = 2, l = 2, h = 1;
+		dynamics.createGround ( w, l, h );
+		const geo = new THREE.BoxGeometry ( w, h, l ); 
 		const mat = new THREE.MeshPhongMaterial ( { color: '#8AC' } );
 		let ground = new THREE.Mesh ( geo, mat );
 			ground.castShadow = true;
@@ -130,31 +140,56 @@ class App extends React.Component {
 		return ground;
 	}	//	createGround()
 
-	createBlock ( name, parent, w, l, h ) {
+	createBlocks ( parent ) {
+		let self = this;
+		let numBlocks = 24, iBlock = 0;
+		let color = '833';
+		function next() {
+			if ( iBlock >= numBlocks ) {
+				return; }
+			//	Name 'block-a', 'block-b', 'block-c', ...
+			let name = 'block-' 
+				+ String.fromCharCode ( 'a'.charCodeAt ( 0 ) + iBlock );
+			//	Cycle the colors red, green, blue, red, green, ...
+			color = color.slice ( 1 ) + color.slice ( 0, 1 );
+			let block = self.createBlock ( name, parent, 0.04, 0.04, 0.04, 
+										   '#' + color );
+			self.blocks[name] = block;
+			iBlock += 1;
+			window.setTimeout ( next, 500 ); }
+		next();
+	}	//	createBlocks()
+
+	createBlock ( name, parent, w, l, h, color ) {
 		dynamics.createBlock ( name, w, l, h );
 		const geo = new THREE.BoxGeometry ( w, h, l );
 	//	const mat = new THREE.MeshPhongMaterial ( { color: '#8AC' } );
-		const mat = new THREE.MeshPhongMaterial ( { color: '#683' } );
+		const mat = new THREE.MeshPhongMaterial ( 
+			{ color: (typeof color === 'string') ? color: '#683' } );
 		let block = new THREE.Mesh ( geo, mat );
 			block.castShadow = true;
 		parent.add ( block );
+		this.blocks[name] = block;
 		return block;
 	}	//	createBlock()
 
-	createCop ( parent, w, l, h ) {
-		w += 0.005;
-		l += 0.005;
-		h += 0.005;
+	createCop ( parent, w, l, h, delta, color ) {
+		w += (typeof delta === 'number') ? delta : 0.005;
+		l += (typeof delta === 'number') ? delta : 0.005;
+		h += (typeof delta === 'number') ? delta : 0.005;
 		const geo		= new THREE.BoxGeometry ( w, h, l );
 		const wireframe	= new THREE.WireframeGeometry ( geo );
 		const lines		= new THREE.LineSegments ( wireframe );
 		let mat	= lines.material;
-		//	mat.color		= new THREE.Color ( 1, 0, 0 );
+		if ( color ) {
+			mat.color = color; }
+		else {
 			mat.color		= new THREE.Color ( 1, 1, 1 );
-			mat.depthText	= false;
+			mat.depthTest	= true;
 			mat.opacity		= 0.25;
-			mat.transparent	= true;
-		parent.add ( lines );
+			mat.transparent	= true; }
+		if ( parent ) {
+			parent.add ( lines ); }
 		return lines;;
 	}	//	createCop()
 	
@@ -301,6 +336,66 @@ class App extends React.Component {
 		next();
 	}	//	runScript()
 
+	cycleBoundingBox ( o ) {
+		const sW = 'App cycleBoundingBox()';
+		console.log ( sW );
+		if ( (o.iLink < 0) || (o.iLink >= this.HiResBBs.length) ) {
+			return; }
+		let bbs = this.HiResBBs[o.iLink];
+		if ( this.HiResBB ) {
+			this.scene.remove ( this.HiResBB.helper );
+			this.HiResBB.helper = this.HiResBB = null; 
+			this.iHiResBB += 1;
+			if ( this.iHiResBB >= bbs.length ) {
+				this.iHiResBB = 0; } }
+		let i = this.iHiResBB;
+		if ( i >= bbs.length ) {
+			i = this.iHiResBB = 0; }
+		let bb = bbs[i];
+		if ( bb ) {
+			if ( bb.obj ) {
+				console.log ( sW + ': i ' + i 
+								 + '  obj  name: ' + bb.obj.name ); }
+			if ( bb.mesh ) {
+				console.log ( sW + ': i ' + i 
+								 + '  mesh name: ' + bb.mesh.name ); }
+
+
+		//	bb.helper = new THREE.BoxHelper ( bb.obj, 0xFFFFFF );
+		//	bb.helper.update();
+		//	this.scene.add ( bb.helper );
+
+			let bbox = null;
+			if ( bb.obj ) {
+				bbox  = new THREE.Box3();
+				bbox.setFromObject ( bb.obj ); }
+			if ( bb.mesh ) {
+				bb.mesh.geometry.computeBoundingBox();
+				bbox = bb.mesh.geometry.boundingBox; }
+				
+			bb.helper = new THREE.Box3Helper ( bbox, 0xFFFFFF );
+			bb.helper.updateMatrixWorld ( true );
+			this.scene.add ( bb.helper );
+			
+			//	To set the helper's matrix, rotation. ?
+			this.renderer3D.render ( this.scene, this.camera ); 
+
+			let lp = Dexter.HiRes.link2.getWorldPosition();
+			let bbSize = new THREE.Vector3();
+			bbox.getSize ( bbSize );
+			console.log ( sW + ': bbSize ' + bbSize.x
+							 + '  ' + bbSize.y
+							 + '  ' + bbSize.z );
+			console.log ( sW + ': lp ' + lp.x + '  ' + lp.y + '  ' + lp.z );
+			let p = bb.helper.position;
+			console.log ( sW + ':  p ' + p.x + '  ' + p.y + '  ' + p.z );
+			let q = bb.helper.quaternion;
+			console.log ( sW + ':  q ' + q.x + '  ' + q.y + '  ' + q.z );
+			this.HiResBB = bb; }
+
+	}	//	cycleBoundingBox()
+
+
 	resizeRendererToDisplaySize() {
 		let h = this.canvas.parentElement.clientHeight;
 		this.canvas.style.height = h + 'px';
@@ -376,48 +471,145 @@ class App extends React.Component {
 		L.decompose ( p, q, s );
 		link.position.set ( p.x, p.y, p.z );
 		link.setRotationFromQuaternion ( q );
+		return link;
 	}	//	chainLink()
 
+	gatherBoundingBoxes ( iLink, link ) {
+		const sW = 'App gatherBoundingBoxes()';
+		let a = this.HiResBBs[iLink] = [];
+		function cBB ( obj, mesh ) {
+			a.push ( { obj:		obj,
+					   mesh:	mesh,
+					   helper:	null } );
+			if ( obj ) {
+				obj.children.forEach ( c => {
+					if ( c.constructor.name === 'Object3D' ) {
+						cBB ( c, null ); }
+					if ( c.constructor.name === 'Mesh' ) {
+						cBB ( null, c ); } } ); }
+
+			if ( mesh ) {
+				mesh.children.forEach ( c => {
+					if ( c.constructor.name === 'Object3D' ) {
+						cBB ( c, null ); }
+					if ( c.constructor.name === 'Mesh' ) {
+						cBB ( null, c ); } } ); }
+		}
+		cBB ( link, null );
+		console.log ( 'a.length ' + a.length );
+	}	//	gatherBoundingBoxes()
+
+	createBoundingBox ( iLink, link, bbObjName ) {
+		const sW = 'App createBoundingBox()';
+		let a = this.HiResBBs[iLink];
+		if ( ! Array.isArray ( a ) ) {
+			return; }
+		let o = a.find ( o => o.obj && o.obj.name === bbObjName );
+		if ( ! o ) {
+			return; }
+		let linkObjForBB = o.obj;
+		let bbox  = new THREE.Box3().setFromObject ( linkObjForBB );
+		let helper = new THREE.Box3Helper ( bbox, 0 );
+			helper.updateMatrixWorld ( true );
+		let L2w = link.matrixWorld;
+		let BBw = helper.matrixWorld;
+
+		let nL2w = new THREE.Matrix4();
+			nL2w.getInverse ( L2w );
+
+		let BBl2 = nL2w.multiply ( BBw );
+
+		//	Create a wireframe to represent the bounding box.
+		let bbSize = new THREE.Vector3();
+		bbox.getSize ( bbSize );
+		console.log ( sW + ': bbSize ' + bbSize.x
+						 + '  ' + bbSize.y
+						 + '  ' + bbSize.z );
+		let w = bbSize.x, l = bbSize.z, h = bbSize.y;
+		let color = new THREE.Color ( 1, 1, 1 );
+		let wf = this.createCop ( null, w, l, h, null, color );
+
+		//	Add it as a child to the link.
+		wf.matrix.identity();
+		wf.scale.set ( 10, 10, 10 );		//	Note scale.
+		link.add ( wf );
+
+		//	Set it's position.
+		let p = new THREE.Vector3();
+		let q = new THREE.Quaternion();
+		let s = new THREE.Vector3();
+		BBl2.decompose ( p, q, s );
+		wf.position.set ( p.x, p.y, p.z );
+		wf.setRotationFromQuaternion ( q );
+	}	//	createBoundingBox()
+
 	getLinks ( grp ) {
+		const sW = 'App getLinks()';
 		let c0    = grp.children[0];
 		this.c0c0  = c0.children[0];
-		this.base  = this.c0c0.children[0];
-		this.link1 = this.c0c0.children[1];
-		this.link2 = this.c0c0.children[2];
-		this.link3 = this.c0c0.children[3];
-		this.link4 = this.c0c0.children[4];
-		this.link5 = this.c0c0.children[5];
+		
+		Dexter.HiRes.base = this.c0c0.children[0];
+
+		Dexter.HiRes.link7 = this.chainLink ( 7 );
+		Dexter.HiRes.link6 = this.chainLink ( 6 );
+		Dexter.HiRes.link5 = this.chainLink ( 5 );
+		Dexter.HiRes.link4 = this.chainLink ( 4 );
+		Dexter.HiRes.link3 = this.chainLink ( 3 );
+		Dexter.HiRes.link2 = this.chainLink ( 2 );
+		Dexter.HiRes.link1 = this.chainLink ( 1 );
+
+		//	Link 7 position.x will open/close the gripper (move the finger).
+		//	x = -0.5		appears to be fully open
+		//	x =  0.02		fully closed
+		let l7 = Dexter.HiRes.link7;
+		
+		//	Likewise finger positon.x. However the sign is changed and the
+		//	values are slightly different. Since 0 here is fully closed this
+		//	finger object is used in this app.
+		//	x = 0.5		appears to be fully open
+		//	x = 0.0		fully closed
+		Dexter.HiRes.finger = l7.children[0].children[0].children[0];
 
 
-	//	let L1 = new THREE.Matrix4();
-	//	L1.copy ( this.link1.matrix );
-	//
-	//	let nL = new THREE.Matrix4();
-	//	nL.getInverse ( L1 );
-	//
-	//	let B = new THREE.Matrix4();
-	//	B.copy ( this.link2.matrix );
-	//
-	//	let L2 = nL.multiply ( B );
-	//
-	//	this.c0c0.children.splice ( 2, 1 );
-	//
-	//	this.link2.matrix.identity();
-	//	this.link1.add ( this.link2 );
-	//
-	//	let p = new THREE.Vector3();
-	//	let q = new THREE.Quaternion();
-	//	let s = new THREE.Vector3();
-	//	L2.decompose ( p, q, s );
-	//	this.link2.position.set ( p.x, p.y, p.z );
-	//	this.link2.setRotationFromQuaternion ( q );
-		this.chainLink ( 7 );
-		this.chainLink ( 6 );
-		this.chainLink ( 5 );
-		this.chainLink ( 4 );
-		this.chainLink ( 3 );
-		this.chainLink ( 2 );
-		this.chainLink ( 1 );
+		//	Bounding boxes.
+		//	All bounding boxes from the link and its children.
+		this.gatherBoundingBoxes ( 0, Dexter.HiRes.base );
+		//	Default bounding box for the link.
+		this.createBoundingBox ( 0, Dexter.HiRes.base, 
+								 'DexterHDI_Link1_KinematicAssembly_v1' );
+
+		this.gatherBoundingBoxes ( 1, Dexter.HiRes.link1 );
+		this.createBoundingBox ( 1, Dexter.HiRes.link1, 
+								 'HDI-210-001_MainPivot_v461' );
+
+		this.gatherBoundingBoxes ( 2, Dexter.HiRes.link2 );
+		this.createBoundingBox ( 2, Dexter.HiRes.link2, 
+								 'DexterHDI_Link2_KinematicAssembly_v5' );
+
+		this.gatherBoundingBoxes ( 3, Dexter.HiRes.link3 );
+		this.createBoundingBox ( 3, Dexter.HiRes.link3, 
+								 'HDI_L3Skins_v541' );
+
+		this.gatherBoundingBoxes ( 4, Dexter.HiRes.link4 );
+		this.createBoundingBox ( 4, Dexter.HiRes.link4, 
+								 'HDI_DiffSkins_v371' );
+
+		this.gatherBoundingBoxes ( 5, Dexter.HiRes.link5 );
+		this.createBoundingBox ( 5, Dexter.HiRes.link5, 
+								 'HDI-950-000_GripperCover_v91' );
+
+		this.gatherBoundingBoxes ( 6, Dexter.HiRes.link6 );
+		this.createBoundingBox ( 6, Dexter.HiRes.link6, 
+								 '' );	//	none, for now
+
+		//	Fingers?
+		//	For now.
+		this.gatherBoundingBoxes ( 7, Dexter.HiRes.link7 );
+		this.createBoundingBox ( 7, Dexter.HiRes.link7, 
+								 'DexterHDI_Link7_KinematicAssembly_v21' );
+
+	//	this.gatherBoundingBoxes ( Dexter.HiRes.link7,
+	//							'' );
 
 	}	//	getLinks()
 
@@ -452,8 +644,8 @@ class App extends React.Component {
 		if ( jc.length > 0 ) {
 			let axis = this.jt['J1'].axis;
 			sim.J1.rotation[axis] = jc[0]; 
-			if ( this.link1 ) {
-				this.link1.rotation[axis] = jc[0]; }
+			if ( Dexter.HiRes.link1 && this.bHiResMoveEnabled ) {
+				Dexter.HiRes.link1.rotation[axis] = jc[0]; }
 			let a = Math.abs ( jv[0] );
 			if ( a > jvAbsMax ) {
 				jvAbsMax = a; }
@@ -461,8 +653,8 @@ class App extends React.Component {
 		if ( jc.length > 1 ) {
 			let axis = this.jt['J2'].axis;
 			sim.J2.rotation[axis] = jc[1]; 
-			if ( this.link2 ) {
-				this.link2.rotation[axis] = jc[1]; }
+			if ( Dexter.HiRes.link2 && this.bHiResMoveEnabled ) {
+				Dexter.HiRes.link2.rotation[axis] = jc[1]; }
 			let a = Math.abs ( jv[1] );
 			if ( a > jvAbsMax ) {
 				jvAbsMax = a; }
@@ -470,8 +662,8 @@ class App extends React.Component {
 		if ( jc.length > 2 ) {
 			let axis = this.jt['J3'].axis;
 			sim.J3.rotation[axis] = jc[2]; 
-			if ( this.link3 ) {
-				this.link3.rotation[axis] = jc[2]; }
+			if ( Dexter.HiRes.link3 && this.bHiResMoveEnabled ) {
+				Dexter.HiRes.link3.rotation[axis] = jc[2]; }
 			let a = Math.abs ( jv[2] );
 			if ( a > jvAbsMax ) {
 				jvAbsMax = a; }
@@ -479,8 +671,8 @@ class App extends React.Component {
 		if ( jc.length > 3 ) {
 			let axis = this.jt['J4'].axis;
 			sim.J4.rotation[axis] = jc[3]; 
-			if ( this.link4 ) {
-				this.link4.rotation[axis] = jc[3]; }
+			if ( Dexter.HiRes.link4 && this.bHiResMoveEnabled ) {
+				Dexter.HiRes.link4.rotation[axis] = jc[3]; }
 			let a = Math.abs ( jv[3] );
 			if ( a > jvAbsMax ) {
 				jvAbsMax = a; }
@@ -488,8 +680,8 @@ class App extends React.Component {
 		if ( jc.length > 4 ) {
 			let axis = this.jt['J5'].axis;
 			sim.J5.rotation[axis] = jc[4]; 
-			if ( this.link5 ) {
-				this.link5.rotation[axis] = jc[4]; }
+			if ( Dexter.HiRes.link5 && this.bHiResMoveEnabled ) {
+				Dexter.HiRes.link5.rotation[axis] = jc[4]; }
 			let a = Math.abs ( jv[4] );
 			if ( a > jvAbsMax ) {
 				jvAbsMax = a; }
@@ -512,10 +704,10 @@ class App extends React.Component {
 			let v = new THREE.Vector3 ( a.x(), a.y(), a.z() );
 			q.setFromAxisAngle ( v, b.ammoQ.getAngle() ); 
 			let p = new THREE.Vector3 ( b.ammoP.x(), b.ammoP.y(), b.ammoP.z() );
-			//	Assume one block. For now.
-			if ( self.block ) {
-				self.block.position.set ( p.x, p.y, p.z );
-				self.block.setRotationFromQuaternion ( q ); } } );
+			let block = self.blocks[b.name];
+			if ( block ) {
+				block.position.set ( p.x, p.y, p.z );
+				block.setRotationFromQuaternion ( q ); } } );
 		
 		dynamics.getCollisionObjectPositions().forEach ( cop => {
 			let obj = self.cops[cop.name];
@@ -527,10 +719,11 @@ class App extends React.Component {
 			q.setFromAxisAngle ( v, cop.qa );
 			obj.position.set ( cop.px, cop.py, cop.pz );
 			obj.setRotationFromQuaternion ( q ); 
-			if ( cop.name === 'block-a' ) {
-				if ( self.block ) {
-					self.block.position.set ( cop.px, cop.py, cop.pz );
-					self.block.setRotationFromQuaternion ( q ); } }
+			if ( cop.name.startsWith ( 'block-' ) ) {
+				let block = self.blocks[cop.name];
+				if ( block ) {
+					block.position.set ( cop.px, cop.py, cop.pz );
+					block.setRotationFromQuaternion ( q ); } }
 		} );
 
 		if ( jc.length > 0 ) {
@@ -594,6 +787,10 @@ class App extends React.Component {
 
 			case 'run-script':
 				this.runScript ( o );
+				break;
+
+			case 'cycle-bounding-box':
+				this.cycleBoundingBox ( o );
 				break;
 
 			case 'add-to-scene':
@@ -672,8 +869,7 @@ class App extends React.Component {
 
 			self.ground = self.createGround ( self.scene );
 
-			self.block = self.createBlock ( 'block-a', 
-											self.scene, 0.3, 0.3, 0.3 );
+			self.createBlocks ( self.scene );
 
 		} );
 

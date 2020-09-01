@@ -11,8 +11,14 @@
 	min-width:          60px;    
 }
 
+.controls-button-container {
+	padding:			2px;
+}
+
 .controls-button {
 	width:				92px;
+	height:				18px;
+	font-size:			10px;
     margin-right:       0px;
 }
 

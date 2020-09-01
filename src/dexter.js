@@ -82,6 +82,18 @@ let Dexter = ( function() {
 //	dexter.LINK3_MASS =		30.0;
 //	dexter.LINK4_MASS =		10.0;
 //	dexter.LINK5_MASS =		10.0;
+	
+	dexter.HiRes =			{ base:		null,
+							  link1:	null,
+							  link2:	null,
+							  link3:	null,
+							  link4:	null,
+							  link5:	null,
+							  link6:	null,
+							  //	Either of these (but not both) can open 
+							  //	and close the gripper.
+							  link7:	null,	
+							  finger:	null }; 
 
 	return dexter;
 } )();

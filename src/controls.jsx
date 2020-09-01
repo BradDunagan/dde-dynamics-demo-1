@@ -28,6 +28,8 @@ class Controls extends React.Component {
 		this.clickImportDexter 	= this.clickImportDexter.bind ( this );
 		this.clickHideShowLowResDexter	= 
 							this.clickHideShowLowResDexter.bind ( this );  
+		this.clickCycleBoundingBox = 
+							this.clickCycleBoundingBox.bind ( this );
 
 		this.doAll				= this.doAll.bind ( this );
 
@@ -83,6 +85,20 @@ class Controls extends React.Component {
 
 	}	//	clickHideShowLowResDexter()
 
+	clickCycleBoundingBox ( evt ) {
+		const sW = 'Controls clickCycleBoundingBox()';
+		let ele = document.getElementById ( 'link-input' );
+		console.log ( sW + ': ele.value ' + ele.value );
+		let iLink = parseInt ( ele.value );
+		if ( typeof iLink !== 'number' ) {
+			return; }
+		if ( Number.isNaN ( iLink ) ) {
+			return; }
+		if ( (iLink < 0) || (iLink > 7) ) {
+			return; }
+		this.props.fncApp ( { do:		'cycle-bounding-box',
+							  iLink:	iLink } );
+	}	//	clickCycleBoundingBox()
 
 	doAll ( o ) {
 		const sW = 'Controls doAll() ' + o.do;
@@ -120,26 +136,48 @@ class Controls extends React.Component {
 								 textAlign:	'center' } } >
 					{ this.props.title }
 				</div>
-				<div style = { { padding:	'5px' } } >
+				<div className = "controls-button-container" >
 					<button className = "controls-general-button controls-button"
 							disabled  = { false }
 							onClick   = { this.clickRunScript } >
 						Run Script
 					</button>
 				</div>
-				<div style = { { padding:	'5px' } } >
+				<div className = "controls-button-container" >
 					<button className = "controls-general-button controls-button"
 							disabled  = { false }
 							onClick   = { this.clickImportDexter } >
 						Import Dexter
 					</button>
 				</div>
-				<div style = { { padding:	'5px' } } >
+				<div className = "controls-button-container" >
 					<button className = "controls-general-button controls-button"
 							disabled  = { false }
 							onClick   = { this.clickHideShowLowResDexter } >
 						{ this.state.lowResVisible ? 'Hide Low Res' 
 												   : 'Show Low Res' }
+					</button>
+				</div>
+				<div className = "controls-button-container" >
+				</div>
+				<div className = "controls-button-container" >
+					<div>
+						<div style = { { display: 		'inline-block',
+										 marginRight:	'4px' } } >
+							Link:
+						</div>
+						<input id = 'link-input'
+							   style = { { width:		'10px',
+										   height:		'10px',
+										   fontSize:	'10px' } } >
+						</input>
+					</div>
+				</div>
+				<div className = "controls-button-container" >
+					<button className = "controls-general-button controls-button"
+							disabled  = { false }
+							onClick   = { this.clickCycleBoundingBox } >
+						Cycle Bndg Box
 					</button>
 				</div>
 			</div>
