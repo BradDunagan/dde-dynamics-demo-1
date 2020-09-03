@@ -27,6 +27,8 @@ class JointData extends React.Component {
 
 		this.doAll		= this.doAll.bind ( this );
 
+		this.titleWidth	= '30';
+
 		this.fncPos = null;
 		this.fncVel = null;
 		this.fncTrq = null;
@@ -40,13 +42,13 @@ class JointData extends React.Component {
 		switch ( o.do ) {
 			case 'set-call-down':
 				switch ( o.what ) {
-					case 'position':
+					case 'pos':
 						this.fncPos = o.fnc;
 						break;
-					case 'velocity':
+					case 'vel':
 						this.fncVel = o.fnc;
 						break;
-					case 'torque':
+					case 'trq':
 						this.fncTrq = o.fnc;
 						break;
 					default:
@@ -73,11 +75,12 @@ class JointData extends React.Component {
 	}	//	doAll()
 
 	render() {
+	//			 style = { { margin:		'5px',
+	//						 border:		'solid gray 1px',
+	//						 fontSize:		'10px',
+	//						 fontFamily:	'courier new' } } >
 		return (
-			<div style = { { margin:		'5px',
-							 border:		'solid gray 1px',
-							 fontSize:		'10px',
-							 fontFamily:	'courier new' } } >
+			<div className = 'controls' >
 				<div style = { { padding:	'2px',
 								 textAlign:	'center' } } >
 					{ this.props.title }
@@ -88,20 +91,20 @@ class JointData extends React.Component {
 					width		= "100%" 
 					height		= "100%"
 					xmlns		= "http://www.w3.org/2000/svg">
-					<Guage title = 'position' 
+					<Guage title = 'pos' 
 						   fncJointData = { this.doAll }
 						   x = '4.5' y = '0.5' 
-						   w = '50'  h = '266'
+						   w = { this.titleWidth }  h = '266'
 						   min = '-180' max = '180' />
-					<Guage title = 'velocity' 
+					<Guage title = 'vel' 
 						   fncJointData = { this.doAll }
-						   x =  '70.5' y = '0.5' 
-						   w = '50' h = '266' 
+						   x =  '50.5' y = '0.5' 
+						   w = { this.titleWidth }  h = '266'
 						   min = '-100' max = '100' />
-					<Guage title = 'torque'   
+					<Guage title = 'trq'   
 						   fncJointData = { this.doAll }
-						   x = '128.5' y = '0.5' 
-						   w = '50' h = '266' 
+						   x = '98.5' y = '0.5' 
+						   w = { this.titleWidth }  h = '266'
 						   min = '-5' max = '5' />
 				</svg>
 			</div>

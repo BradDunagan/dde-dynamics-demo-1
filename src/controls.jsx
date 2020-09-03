@@ -22,7 +22,10 @@ class Controls extends React.Component {
 	constructor ( props ) {
 		super ( props );
 		this.state = {
-			lowResVisible:	true };
+			lowResVisible:		true,
+			transparentDexter:	props.transparentDexter,
+			showingCrdFrms:		props.showingCoordFrames,
+			showingCOPs:		false };
 
 		this.clickRunScript		= this.clickRunScript.bind ( this );
 		this.clickImportDexter 	= this.clickImportDexter.bind ( this );
@@ -30,6 +33,11 @@ class Controls extends React.Component {
 							this.clickHideShowLowResDexter.bind ( this );  
 		this.clickCycleBoundingBox = 
 							this.clickCycleBoundingBox.bind ( this );
+		this.clickTransparentDexter =
+							this.clickTransparentDexter.bind ( this );
+		this.clickShowCoordFrames =
+							this.clickShowCoordFrames.bind ( this );
+		this.clickShowCOPs		= this.clickShowCOPs.bind ( this );
 
 		this.doAll				= this.doAll.bind ( this );
 
@@ -100,6 +108,33 @@ class Controls extends React.Component {
 							  iLink:	iLink } );
 	}	//	clickCycleBoundingBox()
 
+	clickTransparentDexter ( evt ) {
+		const sW = 'Controls clickTransparentDexter()';
+		console.log ( sW );
+		let bTransparent = ! this.state.transparentDexter;
+		this.props.fncApp ( { do:			'transparent-dexter',
+							  bTransparent:	bTransparent } );
+		this.setState ( { transparentDexter: bTransparent } );
+	}	//	clickTransparentDexter()
+
+	clickShowCoordFrames ( evt ) {
+		const sW = 'Controls clickShowCoordFrames()';
+		console.log ( sW );
+		let bShow = ! this.state.showingCrdFrms;
+		this.props.fncApp ( { do:		'show-coord-frames',
+							  bShow:	bShow } );
+		this.setState ( { showingCrdFrms: bShow } );
+	}	//	clickShowCoordFrames()
+
+	clickShowCOPs ( evt ) {
+		const sW = 'Controls clickShowCOPs()';
+		console.log ( sW );
+		let bShow = ! this.state.showingCOPs;
+		this.props.fncApp ( { do:		'show-COPs',
+							  bShow:	bShow } );
+		this.setState ( { showingCOPs: bShow } );
+	}	//	clickShowCOPs()
+
 	doAll ( o ) {
 		const sW = 'Controls doAll() ' + o.do;
 	//	console.log ( sW );
@@ -127,15 +162,12 @@ class Controls extends React.Component {
 	}	//	doAll()
 
 	render() {
+	//			<div style = { { padding:	'2px',
+	//							 textAlign:	'center' } } >
+	//				{ this.props.title }
+	//			</div>
 		return (
-			<div style = { { margin:		'5px',
-							 border:		'solid gray 1px',
-							 fontSize:		'10px',
-							 fontFamily:	'courier new' } } >
-				<div style = { { padding:	'2px',
-								 textAlign:	'center' } } >
-					{ this.props.title }
-				</div>
+			<div className = 'controls' >
 				<div className = "controls-button-container" >
 					<button className = "controls-general-button controls-button"
 							disabled  = { false }
@@ -178,6 +210,30 @@ class Controls extends React.Component {
 							disabled  = { false }
 							onClick   = { this.clickCycleBoundingBox } >
 						Cycle Bndg Box
+					</button>
+				</div>
+				<div className = "controls-button-container" >
+					<button className = "controls-general-button controls-button"
+							disabled  = { false }
+							onClick   = { this.clickTransparentDexter } >
+						{ this.state.transparentDexter ? 'Opaque Dexter'
+													   : 'Transparent Dex' }
+					</button>
+				</div>
+				<div className = "controls-button-container" >
+					<button className = "controls-general-button controls-button"
+							disabled  = { false }
+							onClick   = { this.clickShowCoordFrames } >
+						{ this.state.showingCrdFrms ? 'Hide Crd Frms'
+													: 'Show Crd Frms' } 
+					</button>
+				</div>
+				<div className = "controls-button-container" >
+					<button className = "controls-general-button controls-button"
+							disabled  = { false }
+							onClick   = { this.clickShowCOPs } >
+						{ this.state.showingCOPs ? 'Hide COPs'
+												 : 'Show COPs' } 
 					</button>
 				</div>
 			</div>

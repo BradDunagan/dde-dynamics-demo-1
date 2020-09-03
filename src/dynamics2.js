@@ -2,14 +2,14 @@
 		 1         2         3         4         5         6         7         8
 12345678901234567890123456789012345678901234567890123456789012345678901234567890
 
-	dynamics.js
+	dynamics2.js
 
 */
 
 import Dexter				from './dexter';
 import sim					from './sim';
 
-let dynamics = ( function() {
+let dynamics2 = ( function() {
 
 	let self = {};
 
@@ -175,6 +175,7 @@ let dynamics = ( function() {
 										  collisionFilterMask );
 		block.setBaseCollider ( colsn );
 		colliders.push ( { name:	name,
+						   partOf:	'block',
 						   exts:	extents,
 						   colsn:	colsn } );
 
@@ -184,22 +185,20 @@ let dynamics = ( function() {
 	}	//	createBlock()
 
 
-	self.createMultiBody = function() {
-		const sW = 'dynamics createMultiBody()';
+	self.createMultiBody = function ( config ) {
+		const sW = 'dynamics2 createMultiBody()';
 
-		numLinks = 5;
+		numLinks = 6;		//	Count the moving finger as another link.
 
 		multiBody = null;
 
 		//	The base.
 		//
-		//	For now it is assumed that, for dynamics,  modeling the base as a 
-		//	simple box will be okay.
-		let leg_length = Dexter.LEG_LENGTH;
-		let leg_height = leg_length / 6;
-		let baseHalfExtents = new Ammo.btVector3 ( leg_length, 
-												   leg_length,
-												   leg_height / 2 );
+		let obj   = config.base.obj;
+		let bbDef = config.base.bbDef;
+		let baseHalfExtents = new Ammo.btVector3 ( bbDef.w / 2,
+												   bbDef.h / 2,
+												   bbDef.l / 2 );
 		let baseMass = 0;		//	For now the base does not move.
 		let baseInertiaDiag = new Ammo.btVector3 ( 0, 0, 0 );
 		multiBody = new Ammo.btMultiBody ( numLinks,
@@ -209,8 +208,10 @@ let dynamics = ( function() {
 										   false );		//	can sleep
 		let baseWorldTransform = new Ammo.btTransform();
 		baseWorldTransform.setIdentity();
-		let p0 = sim.J0.position;
-		let o0 = new Ammo.btVector3 ( p0.x, p0.y, p0.z );
+		let p0 = obj.position;
+		let o0 = new Ammo.btVector3 ( p0.x, 
+									  p0.y + (bbDef.h / 2), 
+									  p0.z );
 		baseWorldTransform.setOrigin ( o0 );
 		multiBody.setBaseWorldTransform ( baseWorldTransform );
 
@@ -222,8 +223,19 @@ let dynamics = ( function() {
 		let parentComToCurrentCom 		= null;
 		let currentPivotToCurrentCom	= null;
 		let	parentComToCurrentPivot		= null;
+		let pop							= null;
+		let op							= null;
+		let pw2							= null;
+		let ph2							= null;
+		let pl2							= null;
+		let ppwl						= null;
+		let pwl							= null;
 		let w2							= null;
 		let h2							= null;
+		let l2							= null;
+		let x							= null;
+		let y							= null;
+		let z							= null;
 		let linkHalfExtents				= [];
 		let shape						= null;
 		let linkInertiaDiag				= null;
@@ -232,20 +244,24 @@ let dynamics = ( function() {
 
 		//	Link 1
 		//
-		w2 = Dexter.LINK1_AVERAGE_DIAMETER / 2;
-		h2 = Dexter.LINK1 / 2;
-		//	Parent COM to this link's COM.
-	//	parentComToCurrentCom = new Ammo.btVector3 (
-	//		0,
-	//		sim.J1.positon.y + (h2 - w2),
-	//		0 );
-		currentPivotToCurrentCom = new Ammo.btVector3 ( 0,
-														h2 - w2,
-														0 );
-		parentComToCurrentPivot = new Ammo.btVector3 ( 0,
-													   sim.J1.position.y,
-													   0 );
-		linkHalfExtents.push ( new Ammo.btVector3 ( w2, h2, w2 ) );
+		obj = config.link1.obj;
+		pw2 = config.base.bbDef.w / 2;
+		ph2 = config.base.bbDef.h / 2;
+		pl2 = config.base.bbDef.l / 2;
+		w2  = config.link1.bbDef.w / 2;
+		h2  = config.link1.bbDef.h / 2;
+		l2  = config.link1.bbDef.l / 2;
+		//	Vector from parent COM to joint axis in parent's frame.
+		x = 0;
+		y = ph2;
+		z = 0;
+		parentComToCurrentPivot = new Ammo.btVector3 ( x, y, z );
+		//	Vector from joint axis to curent COM in current frame.
+		x = 0;
+		y = h2;
+		z = 0;
+		currentPivotToCurrentCom = new Ammo.btVector3 ( x, y, z );
+		linkHalfExtents.push ( new Ammo.btVector3 ( w2, h2, l2 ) );
 		shape = new Ammo.btBoxShape ( linkHalfExtents[0] );
 		linkInertiaDiag = new Ammo.btVector3 ( 0, 0, 0 );
 		shape.calculateLocalInertia ( Dexter.LINK1_MASS, linkInertiaDiag );
@@ -257,24 +273,36 @@ let dynamics = ( function() {
 			0,							//	Link index.
 			Dexter.LINK1_MASS,
 			linkInertiaDiag,
-			0 - 1,						//	Parent index.
+			0 - 1,						//	Parent index. Yes, -1.
 			rotParentToCurrent,
 			hingeJointAxis,
 			parentComToCurrentPivot,
 			currentPivotToCurrentCom,
-			false );					//	Do not disable parent collision.
+		//	false );					//	Do not disable parent collision.
+			true );						//	Do     disable parent collision.
 
 		//	Link 2
 		//
-		w2 = Dexter.LINK2_AVERAGE_DIAMETER / 2;
-		h2 = Dexter.LINK2 / 2;
-		currentPivotToCurrentCom = new Ammo.btVector3 ( 0,
-														h2 - w2,
-														0 );
-		parentComToCurrentPivot = new Ammo.btVector3 ( 0,
-													   sim.J2.position.y,
-													   0 );
-		linkHalfExtents.push ( new Ammo.btVector3 ( w2, h2, w2 ) );
+		pop = config.link1.obj.position;
+		pw2 = config.link1.bbDef.w / 2;
+		ph2 = config.link1.bbDef.h / 2;
+		pl2 = config.link1.bbDef.l / 2;
+		op  = config.link2.obj.position;
+		pwl = config.link2.bbDef.posWrtLink.getPosition();
+		w2  = config.link2.bbDef.w / 2;
+		h2  = config.link2.bbDef.h / 2;
+		l2  = config.link2.bbDef.l / 2;
+		//	Vector from parent COM to joint axis in parent's frame.
+		x = 0;
+		y = (op.y / 10) - ph2;
+		z = (op.z / 10);
+		parentComToCurrentPivot = new Ammo.btVector3 ( x, y, z );
+		//	Vector from joint axis to curent COM in current frame.
+		x = pwl.x / 10;
+		y = pwl.y / 10;
+		z = pwl.z / 10;
+		currentPivotToCurrentCom = new Ammo.btVector3 ( x, y, z );
+		linkHalfExtents.push ( new Ammo.btVector3 ( w2, h2, l2 ) );
 		shape = new Ammo.btBoxShape ( linkHalfExtents[1] );
 		linkInertiaDiag = new Ammo.btVector3 ( 0, 0, 0 );
 		shape.calculateLocalInertia ( Dexter.LINK2_MASS, linkInertiaDiag );
@@ -291,19 +319,32 @@ let dynamics = ( function() {
 			hingeJointAxis,
 			parentComToCurrentPivot,
 			currentPivotToCurrentCom,
-			false );					//	Do not disable parent collision.
+		//	false );					//	Do not disable parent collision.
+			true );						//	Do     disable parent collision.
 	
 		//	Link 3
 		//
-		w2 = Dexter.LINK3_AVERAGE_DIAMETER / 2;
-		h2 = Dexter.LINK3 / 2;
-		currentPivotToCurrentCom = new Ammo.btVector3 ( 0,
-														h2 - w2,
-														0 );
-		parentComToCurrentPivot = new Ammo.btVector3 ( 0,
-													   sim.J3.position.y,
-													   0 );
-		linkHalfExtents.push ( new Ammo.btVector3 ( w2, h2, w2 ) );
+		pop  = config.link2.obj.position;
+		ppwl = config.link2.bbDef.posWrtLink.getPosition();
+		pw2  = config.link2.bbDef.w / 2;
+		ph2  = config.link2.bbDef.h / 2;
+		pl2  = config.link2.bbDef.l / 2;
+		op   = config.link3.obj.position;
+		pwl  = config.link3.bbDef.posWrtLink.getPosition();
+		w2   = config.link3.bbDef.w / 2;
+		h2   = config.link3.bbDef.h / 2;
+		l2   = config.link3.bbDef.l / 2;
+		//	Vector from parent COM to joint axis in parent's frame.
+		x = 0;
+		y = (op.y / 10) - (ppwl.y / 10);
+		z = (op.z / 10) - (ppwl.z / 10);
+		parentComToCurrentPivot = new Ammo.btVector3 ( x, y, z );
+		//	Vector from joint axis to curent COM in current frame.
+		x = pwl.x / 10;
+		y = pwl.y / 10;
+		z = pwl.z / 10;
+		currentPivotToCurrentCom = new Ammo.btVector3 ( x, y, z );
+		linkHalfExtents.push ( new Ammo.btVector3 ( w2, h2, l2 ) );
 		shape = new Ammo.btBoxShape ( linkHalfExtents[2] );
 		linkInertiaDiag = new Ammo.btVector3 ( 0, 0, 0 );
 		shape.calculateLocalInertia ( Dexter.LINK3_MASS, linkInertiaDiag );
@@ -324,15 +365,27 @@ let dynamics = ( function() {
 
 		//	Link 4
 		//
-		w2 = Dexter.LINK4_AVERAGE_DIAMETER / 2;
-		h2 = Dexter.LINK4 / 2;
-		currentPivotToCurrentCom = new Ammo.btVector3 ( 0,
-														h2 - w2,
-														0 );
-		parentComToCurrentPivot = new Ammo.btVector3 ( 0,
-													   sim.J4.position.y,
-													   0 );
-		linkHalfExtents.push ( new Ammo.btVector3 ( w2, h2, w2 ) );
+		pop  = config.link3.obj.position;
+		ppwl = config.link3.bbDef.posWrtLink.getPosition();
+		pw2  = config.link3.bbDef.w / 2;
+		ph2  = config.link3.bbDef.h / 2;
+		pl2  = config.link3.bbDef.l / 2;
+		op   = config.link4.obj.position;
+		pwl  = config.link4.bbDef.posWrtLink.getPosition();
+		w2   = config.link4.bbDef.w / 2;
+		h2   = config.link4.bbDef.h / 2;
+		l2   = config.link4.bbDef.l / 2;
+		//	Vector from parent COM to joint axis in parent's frame.
+		x = 0;
+		y = (op.y / 10) - (ppwl.y / 10);
+		z = (op.z / 10) - (ppwl.z / 10);
+		parentComToCurrentPivot = new Ammo.btVector3 ( x, y, z );
+		//	Vector from joint axis to curent COM in current frame.
+		x = pwl.x / 10;
+		y = pwl.y / 10;
+		z = pwl.z / 10;
+		currentPivotToCurrentCom = new Ammo.btVector3 ( x, y, z );
+		linkHalfExtents.push ( new Ammo.btVector3 ( w2, h2, l2 ) );
 		shape = new Ammo.btBoxShape ( linkHalfExtents[3] );
 		linkInertiaDiag = new Ammo.btVector3 ( 0, 0, 0 );
 		shape.calculateLocalInertia ( Dexter.LINK4_MASS, linkInertiaDiag );
@@ -353,23 +406,37 @@ let dynamics = ( function() {
 
 		//	Link 5
 		//
-		w2 = Dexter.LINK5_AVERAGE_DIAMETER / 2;
-		h2 = Dexter.LINK5 / 2;
-		currentPivotToCurrentCom = new Ammo.btVector3 ( 0,
-														-(h2 - w2),
-														0 );
-		parentComToCurrentPivot = new Ammo.btVector3 ( 0,
-													   sim.J5.position.y,
-													   0 );
-		linkHalfExtents.push ( new Ammo.btVector3 ( w2, h2, w2 ) );
+		pop  = config.link4.obj.position;
+		ppwl = config.link4.bbDef.posWrtLink.getPosition();
+		pw2  = config.link4.bbDef.w / 2;
+		ph2  = config.link4.bbDef.h / 2;
+		pl2  = config.link4.bbDef.l / 2;
+		op   = config.link5.obj.position;
+		pwl  = config.link5.bbDef.posWrtLink.getPosition();
+		w2   = config.link5.bbDef.w / 2;
+		h2   = config.link5.bbDef.h / 2;
+		l2   = config.link5.bbDef.l / 2;
+		//	Vector from parent COM to joint axis in parent's frame.
+		x = 0;
+		y = (op.y / 10) - (ppwl.y / 10);
+		z = (op.z / 10) - (ppwl.z / 10);
+		parentComToCurrentPivot = new Ammo.btVector3 ( x, y, z );
+		//	Vector from joint axis to curent COM in current frame.
+		x = pwl.x / 10;
+		y = pwl.y / 10;
+		z = pwl.z / 10;
+		currentPivotToCurrentCom = new Ammo.btVector3 ( x, y, z );
+		linkHalfExtents.push ( new Ammo.btVector3 ( w2, h2, l2 ) );
 		shape = new Ammo.btBoxShape ( linkHalfExtents[4] );
 		linkInertiaDiag = new Ammo.btVector3 ( 0, 0, 0 );
 		shape.calculateLocalInertia ( Dexter.LINK5_MASS, linkInertiaDiag );
 		Ammo.destroy ( shape );
 		shape = null;
 		rotParentToCurrent = new Ammo.btQuaternion();
+	//	rotParentToCurrent.setRotation ( new Ammo.btVector3 ( 0, 0, 1 ),
+	//									 Math.PI / 2 );
 		rotParentToCurrent.setRotation ( new Ammo.btVector3 ( 0, 0, 1 ),
-										 Math.PI / 2 );
+										 0 );
 	//	hingeJointAxis = new Ammo.btVector3 (  0, 1, 0 );
 		hingeJointAxis = new Ammo.btVector3 ( -1, 0, 0 );
 		multiBody.setupRevolute ( 
@@ -383,6 +450,48 @@ let dynamics = ( function() {
 			currentPivotToCurrentCom,
 			false );					//	Do not disable parent collision.
 
+		//	Link 6
+		//
+		pop  = config.link5.obj.position;
+		ppwl = config.link5.bbDef.posWrtLink.getPosition();
+		pw2  = config.link5.bbDef.w / 2;
+		ph2  = config.link5.bbDef.h / 2;
+		pl2  = config.link5.bbDef.l / 2;
+		op   = config.link6.obj.position;
+		pwl  = config.link6.bbDef.posWrtLink.getPosition();
+		w2   = config.link6.bbDef.w / 2;
+		h2   = config.link6.bbDef.h / 2;
+		l2   = config.link6.bbDef.l / 2;
+		//	Vector from parent COM to joint axis in parent's frame.
+		x = (op.x / 10) - (ppwl.x / 10);
+		y = (op.y / 10) - (ppwl.y / 10);
+		z = (op.z / 10) - (ppwl.z / 10);
+		parentComToCurrentPivot = new Ammo.btVector3 ( x, y, z );
+		//	Vector from joint axis to curent COM in current frame.
+		x = -pwl.z / 10;
+		y =  pwl.y / 10;
+		z =  pwl.x / 10;
+		currentPivotToCurrentCom = new Ammo.btVector3 ( x, y, z );
+		linkHalfExtents.push ( new Ammo.btVector3 ( w2, h2, l2 ) );
+		shape = new Ammo.btBoxShape ( linkHalfExtents[5] );
+		linkInertiaDiag = new Ammo.btVector3 ( 0, 0, 0 );
+		shape.calculateLocalInertia ( Dexter.LINK6_MASS, linkInertiaDiag );
+		Ammo.destroy ( shape );
+		shape = null;
+		rotParentToCurrent = new Ammo.btQuaternion();
+		rotParentToCurrent.setRotation ( new Ammo.btVector3 ( 0, 0, 1 ), 0 );
+		hingeJointAxis = new Ammo.btVector3 ( -1, 0, 0 );
+		multiBody.setupRevolute ( 
+			5,							//	Link index.
+			Dexter.LINK6_MASS,
+			linkInertiaDiag,
+			5 - 1,						//	Parent index.
+			rotParentToCurrent,
+			hingeJointAxis,
+			parentComToCurrentPivot,
+			currentPivotToCurrentCom,
+			false );					//	Do not disable parent collision.
+	
 
 		multiBody.finalizeMultiDof();
 
@@ -395,7 +504,7 @@ let dynamics = ( function() {
 		multiBody.setUseGyroTerm ( false );
 
 		multiBody.setLinearDamping ( 0.10 );
-		multiBody.setAngularDamping ( 1.00 );
+		multiBody.setAngularDamping ( 10.00 );
 
 		//	Collisions
 		//
@@ -412,7 +521,6 @@ let dynamics = ( function() {
 		//	Again, modeling the base as a box. For now.
 		//
 		world_to_local.push ( multiBody.getWorldToBaseRot() );
-	//	local_origin.push ( multiBody.getBasePos() );
 		let o = multiBody.getBasePos();
 		local_origin.push ( new Ammo.btVector3 ( o.x(), o.y(), o.z() ) );
 		
@@ -423,8 +531,12 @@ let dynamics = ( function() {
 		//	Is this necessary?
 		tr = new Ammo.btTransform();
 		tr.setIdentity();
-		tr.setOrigin ( local_origin[0] );
-		orn = new Ammo.btQuaternion ( new Ammo.btVector3 ( 0, 0, 0 ), 1 );
+		let lo = local_origin[0];
+	//	tr.setOrigin ( new Ammo.btVector3 ( lo.x(), lo.y(), lo.z() ) );
+		tr.setOrigin ( new Ammo.btVector3 ( 0,
+											baseHalfExtents.y(), 
+										 	0 ) );	
+		orn = new Ammo.btQuaternion ( 0, 0, 0, 1 );
 		tr.setRotation ( orn );
 		colsn.setWorldTransform ( tr );
 
@@ -434,6 +546,10 @@ let dynamics = ( function() {
 		world.addCollisionObject ( colsn, collisionFilterGroup, 
 										  collisionFilterMask );
 		multiBody.setBaseCollider ( colsn );
+		colliders.push ( { name:	'base',
+						   partOf:	'robot',
+						   exts:	baseHalfExtents,
+						   colsn:	colsn } );
 
 		for ( let i = 0; i < numLinks; i++ ) {
 			let parent = multiBody.getParent ( i );
@@ -482,6 +598,7 @@ let dynamics = ( function() {
 		link = multiBody.getLink ( 0 );
 		link.set_m_collider ( colsn );
 		colliders.push ( { name:	'link-1',
+						   partOf:	'robot',
 						   exts:	linkHalfExtents[0],
 						   colsn:	colsn } );
 		
@@ -506,6 +623,7 @@ let dynamics = ( function() {
 		link = multiBody.getLink ( 1 );
 		link.set_m_collider ( colsn );
 		colliders.push ( { name:	'link-2',
+						   partOf:	'robot',
 						   exts:	linkHalfExtents[1],
 						   colsn:	colsn } );
 
@@ -530,6 +648,7 @@ let dynamics = ( function() {
 		link = multiBody.getLink ( 2 );
 		link.set_m_collider ( colsn );
 		colliders.push ( { name:	'link-3',
+						   partOf:	'robot',
 						   exts:	linkHalfExtents[2],
 						   colsn:	colsn } );
 		
@@ -554,6 +673,7 @@ let dynamics = ( function() {
 		link = multiBody.getLink ( 3 );
 		link.set_m_collider ( colsn );
 		colliders.push ( { name:	'link-4',
+						   partOf:	'robot',
 						   exts:	linkHalfExtents[3],
 						   colsn:	colsn } );
 
@@ -578,8 +698,38 @@ let dynamics = ( function() {
 		link = multiBody.getLink ( 4 );
 		link.set_m_collider ( colsn );
 		colliders.push ( { name:	'link-5',
+						   partOf:	'robot',
 						   exts:	linkHalfExtents[4],
 						   colsn:	colsn } );
+
+		//	Collisions - Link 6
+		//	
+		posr = local_origin[6];
+		wtl  = world_to_local[6];
+		shape = new Ammo.btBoxShape ( linkHalfExtents[5] );
+		shapes.push ( shape );
+		colsn = new Ammo.btMultiBodyLinkCollider ( multiBody, 5 );
+		colsn.setCollisionShape ( shape );
+		tr = new Ammo.btTransform();
+		tr.setIdentity();
+		tr.setOrigin ( posr );
+		orn = new Ammo.btQuaternion ( -wtl.x(), -wtl.y(), -wtl.z(), wtl.w() );
+		tr.setRotation ( orn );
+		colsn.setWorldTransform ( tr );
+		collisionFilterGroup = CollisionFilter.DefaultFilter;
+		collisionFilterMask  = CollisionFilter.AllFilter;
+		world.addCollisionObject ( colsn, collisionFilterGroup, 
+										  collisionFilterMask );
+		link = multiBody.getLink ( 5 );
+		link.set_m_collider ( colsn );
+		colliders.push ( { name:	'link-6',
+						   partOf:	'robot',
+						   exts:	linkHalfExtents[5],
+						   colsn:	colsn } );
+
+
+		if ( ! multiBody ) {
+			return null; }
 
 		//	MultiBody tree.
 		//
@@ -618,9 +768,9 @@ let dynamics = ( function() {
 		let pd_control	= null;
 		
 		if ( ! multiBody ) {
-			jc.splice ( 0, 0, 0, 0, 0, 0, 0 );
-			jv.splice ( 0, 0, 0, 0, 0, 0, 0 );
-			jt.splice ( 0, 0, 0, 0, 0, 0, 0 ); }
+			jc.splice ( 0, 0, 0, 0, 0, 0, 0, 0 );
+			jv.splice ( 0, 0, 0, 0, 0, 0, 0, 0 );
+			jt.splice ( 0, 0, 0, 0, 0, 0, 0, 0 ); }
 
 		if ( multiBody ) {
 			num_dofs = multiBody.getNumDofs();
@@ -701,8 +851,8 @@ let dynamics = ( function() {
 					//	No model: just apply PD control law.
 					multiBody.addJointTorque ( dof, pd_control.get ( dof ) );
 				}
-				jv.splice ( 0, 0, 0, 0, 0, 0, 0 );		//	for now
-				jt.splice ( 0, 0, 0, 0, 0, 0, 0 );		//
+				jv.splice ( 0, 0, 0, 0, 0, 0, 0, 0 );		//	for now
+				jt.splice ( 0, 0, 0, 0, 0, 0, 0, 0 );		//
 			}
 		}	//	if ( multiBody )
 	
@@ -748,6 +898,7 @@ let dynamics = ( function() {
 		//	if ( col.name === 'block-a' ) {
 		//		q = q.inverse(); }
 			poses.push ( { name:	col.name,
+						   partOf:	col.partOf,
 						   w:	col.exts.x() * 2,
 						   h:	col.exts.y() * 2,
 						   l:	col.exts.z() * 2,
@@ -765,6 +916,6 @@ let dynamics = ( function() {
 	return self;
 } )();
 
-export { dynamics as default };
+export { dynamics2 as default };
 
-//	dynamics.js
+//	dynamics2.js

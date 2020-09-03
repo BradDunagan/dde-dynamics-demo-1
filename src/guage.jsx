@@ -84,7 +84,7 @@ class Guage extends React.Component {
 				<rect x = '0' width = '4'
 					  y = { vy }  height = { vh }
 					  fill = 'gray' />
-				<rect x = '0' width = '60'
+				<rect x = '0' width = '40'
 					  y = { grad_val - 2 }  height = { th2 + 3 }
 					  fill = 'white' />
 				<text x = '0' y = { grad_val + th2 } > 

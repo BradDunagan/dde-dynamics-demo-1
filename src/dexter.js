@@ -77,6 +77,8 @@ let Dexter = ( function() {
 	dexter.LINK3_MASS =		3.0;
 	dexter.LINK4_MASS =		0.5;
 	dexter.LINK5_MASS =		0.5;
+	dexter.LINK6_MASS =		0.2;
+
 //	dexter.LINK1_MASS =		20.0;
 //	dexter.LINK2_MASS =		60.0;
 //	dexter.LINK3_MASS =		30.0;

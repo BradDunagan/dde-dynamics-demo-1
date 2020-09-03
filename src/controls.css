@@ -1,3 +1,9 @@
+.controls {
+	margin:				5px;
+	border:				solid gray 0.5px;
+	font-size:			10px;
+	font-family:		'courier new'
+}
 
 .controls-general-button {
 	font-family:        Arial, Helvetica, sans-serif;
@@ -12,7 +18,7 @@
 }
 
 .controls-button-container {
-	padding:			2px;
+	padding:			4px;
 }
 
 .controls-button {
