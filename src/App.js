@@ -11,9 +11,7 @@ import * as THREE 			from 'three';
 import { GUI }				from 'dat.gui';
 import { OrbitControls }	from './OrbitControls';
 
-/*
 import dynamics				from './dynamics';
-*/
 import dynamics2			from './dynamics2';
 import Dexter				from './dexter';
 import sim					from './sim';
@@ -506,7 +504,7 @@ class App extends React.Component {
 		ctrl = folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J5' );
 		this.jt['J5'].ctrl = ctrl;
 
-		this.jt['J6'] = { axis:	'y', value: 0 };
+		this.jt['J6'] = { axis:	'z', value: 0 };
 		jointGUIHelper = new JointGUIHelper ( this, 'J6' );
 		ctrl = folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J6' );
 		this.jt['J6'].ctrl = ctrl;
@@ -1226,16 +1224,14 @@ class App extends React.Component {
 		let ground = {};
 		let blocks = [];
 
-		/*
-	//	if ( this.bLoResDynamicsEnabled ) {
-	//		dynamics.stepSimulation ( deltaTime, qd, bInverseDynamics, jc,
-	//								  this.kp, this.kd, jv, jt, ground, 
-	//															blocks ); }
+		if ( this.bLoResDynamicsEnabled ) {
+			dynamics.stepSimulation ( deltaTime, qd, bInverseDynamics, jc,
+									  this.kp, this.kd, jv, jt, ground, 
+																blocks ); }
 		if ( this.bHiResDynamicsEnabled ) { 
 			dynamics2.stepSimulation ( deltaTime, qd, bInverseDynamics, jc,
 									   this.kp, this.kd, jv, jt, ground, 
 																 blocks ); }
-		*/
 
 		if ( jc.length === 0 ) {
 			jc.splice ( 0, 0, 0, 0, 0, 0, 0, 0 );
@@ -1296,10 +1292,8 @@ class App extends React.Component {
 			this.updateGauges ( this.fncJoint5Gauges, jc[4], jv[4], jt[4] ); }
 		if ( jc.length > 5 ) {
 			let axis = this.jt['J6'].axis;
-			if ( this.bLoResMoveEnabled ) {
-				sim.J6.rotation[axis] = jc[5]; }
-			if ( Dexter.HiRes.link5 && this.bHiResMoveEnabled ) {
-				Dexter.HiRes.link5.rotation[axis] = jc[5]; }
+			if ( Dexter.HiRes.link6 && this.bHiResMoveEnabled ) {
+				Dexter.HiRes.link6.rotation[axis] = jc[5]; }
 			let a = Math.abs ( jv[5] );
 			if ( a > jvAbsMax ) {
 				jvAbsMax = a; }

@@ -432,13 +432,11 @@ let dynamics2 = ( function() {
 		shape.calculateLocalInertia ( Dexter.LINK5_MASS, linkInertiaDiag );
 		Ammo.destroy ( shape );
 		shape = null;
-		rotParentToCurrent = new Ammo.btQuaternion();
+		rotParentToCurrent = new Ammo.btQuaternion ( 0, 0, 0, 1 );
 	//	rotParentToCurrent.setRotation ( new Ammo.btVector3 ( 0, 0, 1 ),
 	//									 Math.PI / 2 );
-		rotParentToCurrent.setRotation ( new Ammo.btVector3 ( 0, 0, 1 ),
-										 0 );
-	//	hingeJointAxis = new Ammo.btVector3 (  0, 1, 0 );
-		hingeJointAxis = new Ammo.btVector3 ( -1, 0, 0 );
+		hingeJointAxis = new Ammo.btVector3 (  0, 1, 0 );
+	//	hingeJointAxis = new Ammo.btVector3 ( -1, 0, 0 );
 		multiBody.setupRevolute ( 
 			4,							//	Link index.
 			Dexter.LINK5_MASS,
@@ -478,9 +476,10 @@ let dynamics2 = ( function() {
 		shape.calculateLocalInertia ( Dexter.LINK6_MASS, linkInertiaDiag );
 		Ammo.destroy ( shape );
 		shape = null;
-		rotParentToCurrent = new Ammo.btQuaternion();
-		rotParentToCurrent.setRotation ( new Ammo.btVector3 ( 0, 0, 1 ), 0 );
-		hingeJointAxis = new Ammo.btVector3 ( -1, 0, 0 );
+		rotParentToCurrent = new Ammo.btQuaternion ( 0, 0, 0, 1 );
+		rotParentToCurrent.setRotation ( new Ammo.btVector3 ( 0, 1, 0 ), 
+										 -Math.PI / 2 );
+		hingeJointAxis = new Ammo.btVector3 ( 0, 0, 1 );
 		multiBody.setupRevolute ( 
 			5,							//	Link index.
 			Dexter.LINK6_MASS,
@@ -491,7 +490,7 @@ let dynamics2 = ( function() {
 			parentComToCurrentPivot,
 			currentPivotToCurrentCom,
 			false );					//	Do not disable parent collision.
-	
+
 
 		multiBody.finalizeMultiDof();
 
@@ -504,7 +503,7 @@ let dynamics2 = ( function() {
 		multiBody.setUseGyroTerm ( false );
 
 		multiBody.setLinearDamping ( 0.10 );
-		multiBody.setAngularDamping ( 10.00 );
+		multiBody.setAngularDamping ( 2.00 );
 
 		//	Collisions
 		//
