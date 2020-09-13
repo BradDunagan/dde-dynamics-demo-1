@@ -1107,6 +1107,8 @@ let dynamics2 = ( function() {
 		else {
 			inverseModel = id_creator.CreateMultiBodyTree ( id_creator ); }
 
+		self.createJointMotors();
+
 		return multiBody;
 
 	};	//	createMultiBody()

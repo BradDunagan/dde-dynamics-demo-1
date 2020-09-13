@@ -299,6 +299,11 @@ class App extends React.Component {
 			{ j1: 135, j2: -63, j3: -39, j4:  60,  j5:  -4,	j6:  69, v0: 0.2 },
 			{ f: 0.43, v0: 0.2 },
 			{ release: { } },
+			{ pause:	1000 },
+			{ f: 0.24, v0: 0.2 },
+			{ j1:   0, j2:   0, j3:   0, j4:   0,  j5:   0,	j6:   0, v0: 10.0 },
+			{ camera: { atX: -0.05, atY: 0.36, atZ: -0.04,
+						fmX:  2.68, fmY: 3.29, fmZ:  5.18 } },
 		];
 		this.iScript	= 0;		//	Script statement index
 
@@ -767,17 +772,12 @@ class App extends React.Component {
 
 	createGround ( parent ) {
 		let w = 2, l = 2, h = 1;
-		let dyn = null;
-	//	if ( this.bLoResDynamicsEnabled ) {
-	//		dyn = dynamics; }
 		if ( this.bHiResDynamicsEnabled ) {
-			dyn = dynamics2; }
-		if ( dyn ) {
-			dyn.createGround ( w, l, h ); }
+			dynamics2.createGround ( w, l, h ); }
 		const geo = new THREE.BoxGeometry ( w, h, l ); 
 		const mat = new THREE.MeshPhongMaterial ( { color: '#8AC' } );
 		let ground = new THREE.Mesh ( geo, mat );
-			ground.castShadow = true;
+			ground.castShadow = false;
 			ground.position.y = -2.01;
 			ground.visible = false;		//	For now. Use the checker board.
 		parent.add ( ground );
@@ -811,14 +811,9 @@ class App extends React.Component {
 	}	//	createBlocks()
 
 	createBlock ( name, parent, w, l, h, color, dropFrom ) {
-		let dyn = null;
-	//	if ( this.bLoResDynamicsEnabled ) {
-	//		dyn = dynamics; }
 		if ( this.bHiResDynamicsEnabled ) {
-			dyn = dynamics2; }
-		if ( dyn ) {
 			let p = dropFrom ? dropFrom : this.dropBlocksFrom;
-			dyn.createBlock ( name, p.x, p.y, p.z, w, l, h ); }
+			dynamics2.createBlock ( name, p.x, p.y, p.z, w, l, h ); }
 		const geo = new THREE.BoxGeometry ( w, h, l );
 		const mat = new THREE.MeshPhongMaterial ( 
 			{ color: (typeof color === 'string') ? color: '#683' } );
@@ -1021,7 +1016,7 @@ class App extends React.Component {
 			self.camera.position.set ( fmX, fmY, fmZ );
 			self.orbitControls.update();
 			i += 1;
-			window.setTimeout ( next, 40 ); }
+			window.setTimeout ( next, 20 ); }
 		next();
 	}	//	moveCamera()
 
@@ -1125,19 +1120,19 @@ class App extends React.Component {
 				this.releaseBlock ( this.grasping ); }
 			this.iScript += 1;
 			return; }
-		if ( s.f ) {
+		if ( typeof s.f === 'number' ) {
 			f.setValue ( s.f ); }
-		if ( s.j1 ) {
+		if ( typeof s.j1 === 'number' ) {
 			j1.setValue ( s.j1 ); }
-		if ( s.j2 ) {
+		if ( typeof s.j2 === 'number' ) {
 			j2.setValue ( s.j2 ); }
-		if ( s.j3 ) {
+		if ( typeof s.j3 === 'number' ) {
 			j3.setValue ( s.j3 ); }
-		if ( s.j4 ) {
+		if ( typeof s.j4 === 'number' ) {
 			j4.setValue ( s.j4 ); }
-		if ( s.j5 ) {
+		if ( typeof s.j5 === 'number' ) {
 			j5.setValue ( s.j5 ); }
-		if ( s.j6 ) {
+		if ( typeof s.j6 === 'number' ) {
 			j6.setValue ( s.j6 ); }
 		this.v0CB = { is: this.iScript, v0: s.v0, cb: next } 
 		this.jvAbsMax = [];
@@ -1509,18 +1504,13 @@ class App extends React.Component {
 		this.createCoordFrame ( Dexter.HiRes.base, 0.50, 0.8, false );
 		this.gatherBoundingBoxes ( 0, Dexter.HiRes.base );
 		//	Default bounding box for the link.
-	//	this.createBoundingBox ( 0, Dexter.HiRes.base, 
-	//							 'DexterHDI_Link1_KinematicAssembly_v1' );
 		bbDef = this.defineBoundingBox ( 0, Dexter.HiRes.base, 
 								 'DexterHDI_Link1_KinematicAssembly_v1' );
-	//	this.createBoundingBox ( Dexter.HiRes.base, bbDef );
 		config.base = { obj:	Dexter.HiRes.base,
 						bbDef:	bbDef };
 
 		this.createCoordFrame ( Dexter.HiRes.link1, 0.50, 0.8, false );
 		this.gatherBoundingBoxes ( 1, Dexter.HiRes.link1 );
-	//	this.createBoundingBox ( 1, Dexter.HiRes.link1, 
-	//							 'HDI-210-001_MainPivot_v461' );
 		bbDef = this.defineBoundingBox ( 1, Dexter.HiRes.link1, 
 								 'HDI-210-001_MainPivot_v461' );
 		config.link1 = { obj:	Dexter.HiRes.link1,
@@ -1528,8 +1518,6 @@ class App extends React.Component {
 
 		this.createCoordFrame ( Dexter.HiRes.link2, 0.50, 0.8, false );
 		this.gatherBoundingBoxes ( 2, Dexter.HiRes.link2 );
-	//	this.createBoundingBox ( 2, Dexter.HiRes.link2, 
-	//							 'DexterHDI_Link2_KinematicAssembly_v5' );
 		bbDef = this.defineBoundingBox ( 2, Dexter.HiRes.link2, 
 								 'DexterHDI_Link2_KinematicAssembly_v5' );
 		config.link2 = { obj:	Dexter.HiRes.link2,
@@ -1537,8 +1525,6 @@ class App extends React.Component {
 
 		this.createCoordFrame ( Dexter.HiRes.link3, 0.50, 0.8, false );
 		this.gatherBoundingBoxes ( 3, Dexter.HiRes.link3 );
-	//	this.createBoundingBox ( 3, Dexter.HiRes.link3, 
-	//							 'HDI_L3Skins_v541' );
 		bbDef = this.defineBoundingBox ( 3, Dexter.HiRes.link3, 
 								 'HDI_L3Skins_v541' );
 		config.link3 = { obj:	Dexter.HiRes.link3,
@@ -1546,8 +1532,6 @@ class App extends React.Component {
 
 		this.createCoordFrame ( Dexter.HiRes.link4, 0.50, 0.8, false );
 		this.gatherBoundingBoxes ( 4, Dexter.HiRes.link4 );
-	//	this.createBoundingBox ( 4, Dexter.HiRes.link4, 
-	//							 'HDI_DiffSkins_v371' );
 		bbDef = this.defineBoundingBox ( 4, Dexter.HiRes.link4, 
 								 'HDI_DiffSkins_v371' );
 		config.link4 = { obj:	Dexter.HiRes.link4,
@@ -1555,8 +1539,6 @@ class App extends React.Component {
 
 		this.createCoordFrame ( Dexter.HiRes.link5, 0.50, 0.8, false );
 		this.gatherBoundingBoxes ( 5, Dexter.HiRes.link5 );
-	//	this.createBoundingBox ( 5, Dexter.HiRes.link5, 
-	//							 'HDI-950-000_GripperCover_v91' );
 		bbDef = this.defineBoundingBox ( 5, Dexter.HiRes.link5, 
 							//	 'HDI-950-000_GripperCover_v91' );
 								 'DexterHDI_Link5_KinematicAssembly_v2' );
@@ -1642,8 +1624,6 @@ class App extends React.Component {
 	
 		dynamics2.createMultiBody ( config ); 
 
-		dynamics2.createJointMotors();
-
 	}	//	getLinks()
 
 	render3D ( time ) {
@@ -1666,27 +1646,15 @@ class App extends React.Component {
 
 		//	Need to specify the moving finger position. Just push it on
 		//	qd[].
-	//	qd.push ( (this.ee['Finger'].value + this.mfpf) / 10 );
-		//	Moving finger as a fixed link.
-	//	qd.push (  this.ee['Finger'].value                   );
 		qd.push ( (this.ee['Finger'].value + (2 * this.mfpf)) / 10 );
 
-		let bInverseDynamics = true;
-	//	let bInverseDynamics = false;
 		let jc = [];		//	Joint current values.
 		let jv = [];		//	Joint velocities.
 		let jt = [];		//	Joint applied torques.
 		let ground = {};
 		let blocks = [];
 
-		if ( this.bLoResDynamicsEnabled && this.bLoResStepSim ) {
-			dynamics.stepSimulation ( deltaTime, qd, bInverseDynamics, jc,
-									  this.kp, this.kd, jv, jt, ground, 
-																blocks ); }
 		if ( this.bHiResDynamicsEnabled && this.bHiResStepSim ) { 
-		//	dynamics2.stepSimulation ( deltaTime, qd, bInverseDynamics, jc,
-		//							   this.kp, this.kd, jv, jt, ground, 
-		//														 blocks ); }
 			dynamics2.stepSimulation2 ( deltaTime, qd, jc,
 									    this.kp / 1000, 
 										this.kd / 1000, 
@@ -1787,14 +1755,9 @@ class App extends React.Component {
 				block.position.set ( p.x, p.y, p.z );
 				block.setRotationFromQuaternion ( q ); } } );
 		
-		let dyn = null;
-	//	if ( this.bLoResDynamicsEnabled ) {
-	//		dyn = dynamics; }
-		if ( this.bHiResDynamicsEnabled ) {
-			dyn = dynamics2; }
-		while ( dyn ) {
+		while ( true ) {
 			let olos = [];
-			dyn.getCollisionObjectPositions ( olos ).forEach ( cop => {
+			dynamics2.getCollisionObjectPositions ( olos ).forEach ( cop => {
 				let obj = self.cops[cop.name];
 				if ( ! obj ) {
 					obj = self.createCOP ( self.scene, cop.w, cop.l, cop.h,
@@ -1826,7 +1789,6 @@ class App extends React.Component {
 										 + '  ' + o.numContacts );  } ); } 
 		
 			if ( this.grab ) {
-				//	{ grab: { blk: 'block-x', numContacts: 1, cb; callback } }
 				let g  = this.grab;
 				if ( ! g.nAttempts ) {
 					console.log ( 'out of grab attempts' );
@@ -1862,7 +1824,7 @@ class App extends React.Component {
 						g.cb();
 						break; } } }
 			break;
-		}	//	while ( dyn )
+		}	//	while ( true )
 		
 		if ( jc.length > 0 ) {
 			this.renderer3D.render ( this.scene, this.camera ); }
@@ -2021,25 +1983,14 @@ class App extends React.Component {
 
 		let self = this;
 
-		let dyn = null;
-		let bCreateDexter = false;
-	//	if ( this.bLoResDynamicsEnabled ) {
-	//		dyn = dynamics; 
-	//		bCreateDexter = this.bCreateLoResDexter; }
 		if ( this.bHiResDynamicsEnabled ) {
-			dyn = dynamics2; 
-		//	bCreateDexter = this.bCreateHiResDexter; }
-			bCreateDexter = false; }	//	after import
-		if ( dyn ) {
-			dyn.init().then ( status => {
+			dynamics2.init().then ( status => {
 				console.log ( sW + ': dynamics status: ' + status );
-				dyn.createEmptyDynamicsWorld();
-				if ( bCreateDexter ) {
-					dyn.createMultiBody(); }
+				dynamics2.createEmptyDynamicsWorld();
 				//	Ground and blocks are involved in collisions.
 				self.ground = self.createGround ( self.scene );
 				self.createBlocks ( self.scene );
-			} ); }
+			} );}
 
 		this.gui = new GUI();
 		this.gui.domElement.id = 'gui';
