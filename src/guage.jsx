@@ -7,7 +7,6 @@
 
 import React 				from 'react';
 
-import dynamics				from './dynamics';
 import Dexter				from './dexter';
 import sim					from './sim';
 

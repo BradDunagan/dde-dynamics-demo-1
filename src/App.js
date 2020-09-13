@@ -11,7 +11,6 @@ import * as THREE 			from 'three';
 import { GUI }				from 'dat.gui';
 import { OrbitControls }	from './OrbitControls';
 
-import dynamics				from './dynamics';
 import dynamics2			from './dynamics2';
 import Dexter				from './dexter';
 import sim					from './sim';
