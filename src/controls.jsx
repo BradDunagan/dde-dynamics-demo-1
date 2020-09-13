@@ -27,6 +27,9 @@ class Controls extends React.Component {
 			showingCrdFrms:		props.showingCoordFrames,
 			showingCOPs:		false };
 
+		this.importDexterFromGltf = 
+							this.importDexterFromGltf.bind ( this );
+		this.clickStepScript	= this.clickStepScript.bind ( this );
 		this.clickRunScript		= this.clickRunScript.bind ( this );
 		this.clickImportDexter 	= this.clickImportDexter.bind ( this );
 		this.clickHideShowLowResDexter	= 
@@ -44,15 +47,8 @@ class Controls extends React.Component {
 	}	//	constructor()
 
 
-	clickRunScript ( evt ) {
-		const sW = 'Controls clickRunScript()';
-		console.log ( sW );
-		this.props.fncApp ( { do:	'run-script' } );
-	}	//	clickRunScript()
-
-	clickImportDexter ( evt ) {
-		const sW = 'Controls clickImportDexter()';
-		console.log ( sW );
+	importDexterFromGltf() {
+		const sW = 'Controls importDexterFromGltf()';
 		const gltfLoader = new GLTFLoader();
 		const url = 'HDIMeterModel.gltf';
 		gltfLoader.load ( url, ( gltf ) => {
@@ -63,11 +59,26 @@ class Controls extends React.Component {
 			c0.scale.set ( 0.001, 0.001, 0.001 );
 			//	Remove imported lights, cameras.
 			c0.children.splice ( 1 )
-		//	scene.add ( root ); 
-			//	Same thing.
 			this.props.fncApp ( { do:	'add-to-scene',
 								  obj:	root			} );
 		} );
+	}	//	importDexterFromGltf()
+
+	clickStepScript ( evt ) {
+		const sW = 'Controls clickStepScript()';
+		console.log ( sW );
+		this.props.fncApp ( { do:	'step-script' } );
+	}	//	clickStepScript()
+
+	clickRunScript ( evt ) {
+		const sW = 'Controls clickRunScript()';
+		console.log ( sW );
+		this.props.fncApp ( { do:	'run-script' } );
+	}	//	clickRunScript()
+
+	clickImportDexter ( evt ) {
+		const sW = 'Controls clickImportDexter()';
+		console.log ( sW );
 		/*
 		const fbxLoader = new FBXLoader();
 		const url = 'HDIMeterModel.fbx';
@@ -78,18 +89,19 @@ class Controls extends React.Component {
 		//	scene.add(root); 
 		} );
 		*/
+		this.importDexterFromGltf();
 	}	//	clickImportDexter()
 
 	clickHideShowLowResDexter ( evt ) {
 		const sW = 'Controls clickHideShowLowResDexter()';
 		console.log ( sW );
 
-		let bShow = ! this.state.lowResVisible;
-
-		this.props.fncApp ( { do:		'show-low-res',
-							  bShow:	bShow } );
-
-		this.setState ( { lowResVisible: bShow } );
+	//	let bShow = ! this.state.lowResVisible;
+	//
+	//	this.props.fncApp ( { do:		'show-low-res',
+	//						  bShow:	bShow } );
+	//
+	//	this.setState ( { lowResVisible: bShow } );
 
 	}	//	clickHideShowLowResDexter()
 
@@ -171,13 +183,6 @@ class Controls extends React.Component {
 				<div className = "controls-button-container" >
 					<button className = "controls-general-button controls-button"
 							disabled  = { false }
-							onClick   = { this.clickRunScript } >
-						Run Script
-					</button>
-				</div>
-				<div className = "controls-button-container" >
-					<button className = "controls-general-button controls-button"
-							disabled  = { false }
 							onClick   = { this.clickImportDexter } >
 						Import Dexter
 					</button>
@@ -185,9 +190,23 @@ class Controls extends React.Component {
 				<div className = "controls-button-container" >
 					<button className = "controls-general-button controls-button"
 							disabled  = { false }
+							onClick   = { this.clickStepScript } >
+						Step Script
+					</button>
+				</div>
+				<div className = "controls-button-container" >
+					<button className = "controls-general-button controls-button"
+							disabled  = { false }
+							onClick   = { this.clickRunScript } >
+						Run Script
+					</button>
+				</div>
+				<div className = "controls-button-container" >
+					<button className = "controls-general-button controls-button"
+							disabled  = { false }
 							onClick   = { this.clickHideShowLowResDexter } >
-						{ this.state.lowResVisible ? 'Hide Low Res' 
-												   : 'Show Low Res' }
+				{ /*	{ this.state.lowResVisible ? 'Hide Low Res' 
+												   : 'Show Low Res' } */ }
 					</button>
 				</div>
 				<div className = "controls-button-container" >

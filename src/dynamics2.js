@@ -17,6 +17,10 @@ let dynamics2 = ( function() {
 
 	let quatRotate = null;
 
+	let dispatcher = null;
+
+	let broadphase = null;
+
 	let world = null;
 
 	let ground = null;
@@ -24,6 +28,8 @@ let dynamics2 = ( function() {
 	let numLinks = 0;
 
 	let multiBody = null;
+
+	let jointMotors = null;
 	
 	let inverseModel = null;
 
@@ -35,13 +41,27 @@ let dynamics2 = ( function() {
 
 	//	Could not expose the btBrodphaseProxy CollisionFilterGroups enum.
 	//	So, for now, ...
-	let CollisionFilter = { DefaultFilter:		1,
-							StaticFilter:		2,
-							KinematicFilter:	4,
-							DebrisFilter:		8,
-							SensorTrigger:		16,
-							CharacterFilter:	32,
-							AllFilter:			-1 };
+	let CollisionFilter = { 
+		DefaultFilter:		1,
+		StaticFilter:		2,
+		KinematicFilter:	4,
+		DebrisFilter:		8,
+		SensorTrigger:		16,
+		CharacterFilter:	32,
+		AllFilter:			-1 };
+
+	let CollisionFlags = {
+		CF_STATIC_OBJECT:						1,
+		CF_KINEMATIC_OBJECT:					2,
+		CF_NO_CONTACT_RESPONSE:					4,
+		CF_CUSTOM_MATERIAL_CALLBACK:			8,
+		CF_CHARACTER_OBJECT:					16,
+		CF_DISABLE_VISUALIZE_OBJECT:			32,
+		CF_DISABLE_SPU_COLLISION_PROCESSING:	64,
+		CF_HAS_CONTACT_STIFFNESS_DAMPING:		128,
+		CF_HAS_CUSTOM_DEBUG_RENDERING_COLOR:	256,
+		CF_HAS_FRICTION_ANCHOR:					512,
+		CF_HAS_COLLISION_SOUND_TRIGGER:			1024 };
 
 	self.ground = null;
 	self.blocks = [];
@@ -56,9 +76,8 @@ let dynamics2 = ( function() {
 
 	self.createEmptyDynamicsWorld = function() {
 		let collisionConfiguration = new Ammo.btDefaultCollisionConfiguration();
-		let dispatcher = new Ammo.btCollisionDispatcher (
-													collisionConfiguration );
-		let broadphase = new Ammo.btSimpleBroadphase ( 1000 );
+		dispatcher = new Ammo.btCollisionDispatcher ( collisionConfiguration );
+		broadphase = new Ammo.btSimpleBroadphase ( 1000 );
 		let solver = new Ammo.btMultiBodyConstraintSolver();
 		world = new Ammo.btMultiBodyDynamicsWorld ( dispatcher,
 													broadphase,
@@ -90,6 +109,7 @@ let dynamics2 = ( function() {
 		let mass = 0;		//	Ground is not dynamic (does not move).
 		let inertiaDiag = new Ammo.btVector3 ( 0, 0, 0 );
 
+		/*
 		ground = new Ammo.btMultiBody ( 0,
 									    mass,
 									    inertiaDiag,
@@ -113,13 +133,53 @@ let dynamics2 = ( function() {
 		world.addCollisionObject ( colsn, collisionFilterGroup, 
 										  collisionFilterMask );
 		ground.setBaseCollider ( colsn );
+		*/
+		let motionState = new Ammo.btDefaultMotionState();
+		motionState.setWorldTransform ( groundTransform );
+		ground = new Ammo.btRigidBody ( mass,
+										motionState,
+										groundShape, 
+										inertiaDiag );
+		ground.setDamping ( 2.0,	//	linear
+							0.1 );	//	angular
+		world.addRigidBody ( ground );
+
+
+		let colsn = new Ammo.btGhostObject();
+		colsn.setUserIndex ( colliders.length );
+		colsn.setCollisionShape ( groundShape );
+		colsn.setWorldTransform ( groundTransform );
+		let collisionFilterGroup = CollisionFilter.StaticFilter;
+		let collisionFilterMask  =   CollisionFilter.AllFilter
+								   ^ CollisionFilter.StaticFilter;
+		world.addCollisionObject ( colsn, collisionFilterGroup, 
+										  collisionFilterMask );
+
+
+		colliders.push ( { name:	'ground',
+						   partOf:	'world',
+						   isBlock:	false,
+						   exts:	extents,
+						   colsn:	colsn } );
 
 		self.ground = ground;
 
 	}	//	createGround()
 
 
-	self.createBlock = function ( name, w, l, h ) {
+	self.setBlockColliderWorldTransform = function ( blk ) {
+		let posr = blk.block.getCenterOfMassPosition();
+		let wtl  = blk.block.getOrientation().inverse();
+		let tr = new Ammo.btTransform();
+		tr.setIdentity();
+		tr.setOrigin ( posr );
+		let orn = new Ammo.btQuaternion ( -wtl.x(), -wtl.y(), -wtl.z(), 
+										   wtl.w() );
+		tr.setRotation ( orn );
+		blk.colsn.setWorldTransform ( tr );
+	}	//	setBlockColliderWorldTransform()
+	
+	self.createBlock = function ( name, x, y, z, w, l, h ) {
 
 		let extents = new Ammo.btVector3 ( w/2, h/2, l/2 );
 		let blockShape = new Ammo.btBoxShape ( extents );
@@ -135,13 +195,15 @@ let dynamics2 = ( function() {
 		blockTransform.setRotation ( q );
 
 		//	Drop from ...
-		let orgn = new Ammo.btVector3 ( -0.5, 0.5, 0 );
+	//	let orgn = new Ammo.btVector3 ( -0.5, 0.5, 0 );
+		let orgn = new Ammo.btVector3 ( x, y, z );
 		blockTransform.setOrigin ( orgn );
 
 		let mass = 1;
 		let inertiaDiag = new Ammo.btVector3 ( 0, 0, 0 );
 		blockShape.calculateLocalInertia ( mass, inertiaDiag );
 
+		/*
 		let block = new Ammo.btMultiBody ( 0,
 										   mass,
 										   inertiaDiag,
@@ -151,15 +213,12 @@ let dynamics2 = ( function() {
 		block.setBaseWorldTransform ( blockTransform );	
 		block.finalizeMultiDof();
 		block.setAngularDamping ( 0.10 );
-		block.setLinearDamping ( 2.00 );
+		block.setLinearDamping ( 0.10 );
 		world.addMultiBody ( block );
-		
+
 		let colsn = new Ammo.btMultiBodyLinkCollider ( block, -1 );
 		colsn.setCollisionShape ( blockShape );
-
-	//	colsn.setWorldTransform ( blockTransform );
 		let posr = block.getBasePos();
-	//	let wtl  = block.getWorldToBaseRot();
 		let wtl  = block.getWorldToBaseRot().inverse();
 		let tr = new Ammo.btTransform();
 		tr.setIdentity();
@@ -174,21 +233,129 @@ let dynamics2 = ( function() {
 		world.addCollisionObject ( colsn, collisionFilterGroup, 
 										  collisionFilterMask );
 		block.setBaseCollider ( colsn );
+		*/
+
+		let motionState = new Ammo.btDefaultMotionState();
+		motionState.setWorldTransform ( blockTransform );
+		let block = new Ammo.btRigidBody ( mass,
+										   motionState,
+										   blockShape, 
+										   inertiaDiag );
+		block.setDamping ( 0.1,		//	linear
+						   0.1 );	//	angular
+		world.addRigidBody ( block );
+
+
+		let blk = { name:	name,
+					block:	block,
+					colsn:	null};
+		self.blocks.push ( blk );
+
+		block.setUserIndex ( colliders.length );
+
 		colliders.push ( { name:	name,
-						   partOf:	'block',
+						   partOf:	'world',
+						   isBlock:	true,
+						   exts:	extents,
+						   body:	block,
+						   colsn:	null } );
+
+		/*
+		let colsn = new Ammo.btGhostObject();
+		colsn.setUserIndex ( colliders.length );
+		colsn.setCollisionShape ( blockShape );
+		//	This colsn object and the block are sharing the same space so
+		//	that through this "ghost" we can call to see if there is an
+		//	overlap of the block and another object. But we don't want any
+		//	response from this ghost.
+		colsn.setCollisionFlags ( CollisionFlags.CF_NO_CONTACT_RESPONSE );
+
+		let blk = { name:	name,
+					block:	block,
+					colsn:	colsn };
+		self.blocks.push ( blk );
+		self.setBlockColliderWorldTransform ( blk );
+
+		let collisionFilterGroup = CollisionFilter.DefaultFilter;
+		let collisionFilterMask  = CollisionFilter.AllFilter;
+		world.addCollisionObject ( colsn, collisionFilterGroup, 
+										  collisionFilterMask );
+
+		colliders.push ( { name:	name,
+						   partOf:	'world',
+						   isBlock:	true,
 						   exts:	extents,
 						   colsn:	colsn } );
-
-		self.blocks.push ( { name:	name,
-							 block:	block } );
-
+		*/
 	}	//	createBlock()
 
+
+	self.disableContactResponse = function ( name ) {
+		const sW = 'dynamics disableContactResponse()';
+		let c = colliders.find ( c => c.name === name );
+		if ( ! c ) {
+			console.error ( sW + ': collider "' + name + '" not found' ); 
+			return; }
+		if ( c.colsn ) {
+			c.colsn.setCollisionFlags ( CollisionFlags.CF_NO_CONTACT_RESPONSE );
+			return; }
+		if ( c.body ) {
+			c.body.setCollisionFlags ( CollisionFlags.CF_NO_CONTACT_RESPONSE );
+			return; }
+	}	//	disableContactResponse()
+
+	self.enableContactResponse = function ( name ) {
+		const sW = 'dynamics enableContactResponse()';
+		let c = colliders.find ( c => c.name === name );
+		if ( ! c ) {
+			console.error ( sW + ': collider "' + name + '" not found' ); 
+			return; }
+		if ( c.colsn ) {
+			c.colsn.setCollisionFlags ( 0 );
+			return; }
+		if ( c.body ) {
+			c.body.setCollisionFlags ( 0 );
+			return; }
+	}	//	enableContactResponse()
+	
+	self.positionBlock = function ( name, p, r ) {
+		const sW = 'dynamics positionBlock()';
+		let c = colliders.find ( c => c.name === name );
+		if ( ! c ) {
+			console.error ( sW + ': collider "' + name + '" not found' ); 
+			return; }
+		if ( ! c.body ) {
+			console.error ( sW + ': expected block to be a btRigidBody' );
+			return; }
+	
+		let block = c.body;
+		let ms = block.getMotionState();
+		if ( ms ) {
+			Ammo.destroy ( ms ); }
+
+		let blockTransform = new Ammo.btTransform();
+		blockTransform.setIdentity();
+		let v = new Ammo.btVector3 ( p.x, p.y, p.z );
+		let q = new Ammo.btQuaternion ( r.x, r.y, r.z, r.w );
+		blockTransform.setRotation ( q );
+		blockTransform.setOrigin ( v );
+
+		ms = new Ammo.btDefaultMotionState();
+		ms.setWorldTransform ( blockTransform );
+		block.setMotionState ( ms );
+
+		let zero = new Ammo.btVector3 ( 0, 0, 0 );
+		block.setLinearVelocity ( zero );
+		block.setAngularVelocity ( zero );
+		Ammo.destroy ( zero );
+	}	//	positionBlock()
 
 	self.createMultiBody = function ( config ) {
 		const sW = 'dynamics2 createMultiBody()';
 
-		numLinks = 6;		//	Count the moving finger as another link.
+	//	numLinks = 6;		//	The moving finger pad is part of the compound
+	//						//	shape of link 6.
+		numLinks = 7;		//	The moving finger pad is dynamically "fixed".
 
 		multiBody = null;
 
@@ -237,10 +404,12 @@ let dynamics2 = ( function() {
 		let y							= null;
 		let z							= null;
 		let linkHalfExtents				= [];
+		let compoundShape				= null;
+		let localTransform				= null;
 		let shape						= null;
 		let linkInertiaDiag				= null;
 		let rotParentToCurrent			= null;
-		let hingeJointAxis				= null;
+		let jointAxis					= null;
 
 		//	Link 1
 		//
@@ -268,14 +437,14 @@ let dynamics2 = ( function() {
 		Ammo.destroy ( shape );
 		shape = null;
 		rotParentToCurrent = new Ammo.btQuaternion ( 0, 0, 0, 1 );
-		hingeJointAxis = new Ammo.btVector3 ( 0, 1, 0 );
+		jointAxis	 = new Ammo.btVector3 ( 0, 1, 0 );
 		multiBody.setupRevolute ( 
 			0,							//	Link index.
 			Dexter.LINK1_MASS,
 			linkInertiaDiag,
 			0 - 1,						//	Parent index. Yes, -1.
 			rotParentToCurrent,
-			hingeJointAxis,
+			jointAxis	,
 			parentComToCurrentPivot,
 			currentPivotToCurrentCom,
 		//	false );					//	Do not disable parent collision.
@@ -309,14 +478,14 @@ let dynamics2 = ( function() {
 		Ammo.destroy ( shape );
 		shape = null;
 		rotParentToCurrent = new Ammo.btQuaternion ( 0, 0, 0, 1 );
-		hingeJointAxis = new Ammo.btVector3 ( 0, 0, 1 );
+		jointAxis	 = new Ammo.btVector3 ( 0, 0, 1 );
 		multiBody.setupRevolute ( 
 			1,							//	Link index.
 			Dexter.LINK2_MASS,
 			linkInertiaDiag,
 			1 - 1,						//	Parent index.
 			rotParentToCurrent,
-			hingeJointAxis,
+			jointAxis	,
 			parentComToCurrentPivot,
 			currentPivotToCurrentCom,
 		//	false );					//	Do not disable parent collision.
@@ -351,14 +520,14 @@ let dynamics2 = ( function() {
 		Ammo.destroy ( shape );
 		shape = null;
 		rotParentToCurrent = new Ammo.btQuaternion ( 0, 0, 0, 1 );
-		hingeJointAxis = new Ammo.btVector3 ( 0, 0, 1 );
+		jointAxis	 = new Ammo.btVector3 ( 0, 0, 1 );
 		multiBody.setupRevolute ( 
 			2,							//	Link index.
 			Dexter.LINK3_MASS,
 			linkInertiaDiag,
 			2 - 1,						//	Parent index.
 			rotParentToCurrent,
-			hingeJointAxis,
+			jointAxis	,
 			parentComToCurrentPivot,
 			currentPivotToCurrentCom,
 			false );					//	Do not disable parent collision.
@@ -392,14 +561,14 @@ let dynamics2 = ( function() {
 		Ammo.destroy ( shape );
 		shape = null;
 		rotParentToCurrent = new Ammo.btQuaternion ( 0, 0, 0, 1 );
-		hingeJointAxis = new Ammo.btVector3 ( 0, 0, 1 );
+		jointAxis	 = new Ammo.btVector3 ( 0, 0, 1 );
 		multiBody.setupRevolute ( 
 			3,							//	Link index.
 			Dexter.LINK4_MASS,
 			linkInertiaDiag,
 			3 - 1,						//	Parent index.
 			rotParentToCurrent,
-			hingeJointAxis,
+			jointAxis	,
 			parentComToCurrentPivot,
 			currentPivotToCurrentCom,
 			false );					//	Do not disable parent collision.
@@ -435,15 +604,15 @@ let dynamics2 = ( function() {
 		rotParentToCurrent = new Ammo.btQuaternion ( 0, 0, 0, 1 );
 	//	rotParentToCurrent.setRotation ( new Ammo.btVector3 ( 0, 0, 1 ),
 	//									 Math.PI / 2 );
-		hingeJointAxis = new Ammo.btVector3 (  0, 1, 0 );
-	//	hingeJointAxis = new Ammo.btVector3 ( -1, 0, 0 );
+		jointAxis	 = new Ammo.btVector3 (  0, 1, 0 );
+	//	jointAxis	 = new Ammo.btVector3 ( -1, 0, 0 );
 		multiBody.setupRevolute ( 
 			4,							//	Link index.
 			Dexter.LINK5_MASS,
 			linkInertiaDiag,
 			4 - 1,						//	Parent index.
 			rotParentToCurrent,
-			hingeJointAxis,
+			jointAxis	,
 			parentComToCurrentPivot,
 			currentPivotToCurrentCom,
 			false );					//	Do not disable parent collision.
@@ -466,32 +635,143 @@ let dynamics2 = ( function() {
 		z = (op.z / 10) - (ppwl.z / 10);
 		parentComToCurrentPivot = new Ammo.btVector3 ( x, y, z );
 		//	Vector from joint axis to curent COM in current frame.
-		x = -pwl.z / 10;
-		y =  pwl.y / 10;
-		z =  pwl.x / 10;
+		x = -pwl.x / 10;	//	Signs because of the rotation of this joint's
+		y =  pwl.y / 10;	//	coord frame wrt parent's.
+		z = -pwl.z / 10;	//
 		currentPivotToCurrentCom = new Ammo.btVector3 ( x, y, z );
-		linkHalfExtents.push ( new Ammo.btVector3 ( w2, h2, l2 ) );
+		//	w and l are swapped because of this joint's coord frame rotation
+		//	wrt parent's.
+		linkHalfExtents.push ( new Ammo.btVector3 ( l2, h2, w2 ) );
+
 		shape = new Ammo.btBoxShape ( linkHalfExtents[5] );
 		linkInertiaDiag = new Ammo.btVector3 ( 0, 0, 0 );
 		shape.calculateLocalInertia ( Dexter.LINK6_MASS, linkInertiaDiag );
 		Ammo.destroy ( shape );
 		shape = null;
+
+	//	compoundShape = new Ammo.btCompoundShape ( true, 2 );
+	//	shape = new Ammo.btBoxShape ( linkHalfExtents[5] );
+	//	localTransform = new Ammo.btTransform ( );
+	//	localTransform.setIdentity();
+	//	compoundShape.addChildShape ( localTransform, shape );
+	//	shape = new Ammo.btBoxShape ( linkHalfExtents[5] );
+	//	localTransform = new Ammo.btTransform ( );
+	//	localTransform.setIdentity();
+	//	localTransform.setOrigin ( new Ammo.btVector3 ( config.link6.finger.x, 
+	//													0, 0 ) );
+	//	compoundShape.addChildShape ( localTransform, shape );
+	//	linkInertiaDiag = new Ammo.btVector3 ( 0, 0, 0 );
+	//	compoundShape.calculateLocalInertia ( Dexter.LINK6_MASS, 
+	//										  linkInertiaDiag );
+	//	Ammo.destroy ( compoundShape );
+	//	compoundShape = null;
+
 		rotParentToCurrent = new Ammo.btQuaternion ( 0, 0, 0, 1 );
+		//	Rotate this joint's coord frame wrt parent's.
 		rotParentToCurrent.setRotation ( new Ammo.btVector3 ( 0, 1, 0 ), 
 										 -Math.PI / 2 );
-		hingeJointAxis = new Ammo.btVector3 ( 0, 0, 1 );
+		jointAxis	 = new Ammo.btVector3 ( 0, 0, -1 );
 		multiBody.setupRevolute ( 
 			5,							//	Link index.
 			Dexter.LINK6_MASS,
 			linkInertiaDiag,
 			5 - 1,						//	Parent index.
 			rotParentToCurrent,
-			hingeJointAxis,
+			jointAxis	,
 			parentComToCurrentPivot,
 			currentPivotToCurrentCom,
 			false );					//	Do not disable parent collision.
 
+		/*	The moving finger pad is part of the compound shape of link 6.
+		//	Moving Finger
+		//
+		pop  = config.link6.obj.position;
+		ppwl = config.link6.bbDef.posWrtLink.getPosition();
+		pw2  = config.link6.bbDef.w / 2;
+		ph2  = config.link6.bbDef.h / 2;
+		pl2  = config.link6.bbDef.l / 2;
+	//	op   = config.finger.obj.position;
+		op   = config.finger.posWrtParent;
+		pwl  = config.finger.bbDef.posWrtLink.getPosition();
+		w2   = config.finger.bbDef.w / 2;
+		h2   = config.finger.bbDef.h / 2;
+		l2   = config.finger.bbDef.l / 2;
+		//	Vector from parent COM to joint axis in parent's frame.
+		x = (op.x / 10) - (ppwl.x / 10);
+		y = (op.y / 10) - (ppwl.y / 10);
+		z = (op.z / 10) - (ppwl.z / 10);
+		parentComToCurrentPivot = new Ammo.btVector3 ( x, y, z );
+		//	Vector from joint axis to curent COM in current frame.
+		x =  pwl.x / 10;
+		y =  pwl.y / 10;
+		z =  pwl.z / 10;
+		currentPivotToCurrentCom = new Ammo.btVector3 ( x, y, z );
+		linkHalfExtents.push ( new Ammo.btVector3 ( w2, h2, l2 ) );
+		shape = new Ammo.btBoxShape ( linkHalfExtents[6] );
+		linkInertiaDiag = new Ammo.btVector3 ( 0, 0, 0 );
+		shape.calculateLocalInertia ( Dexter.FINGER_MASS, linkInertiaDiag );
+		Ammo.destroy ( shape );
+		shape = null;
+		rotParentToCurrent = new Ammo.btQuaternion ( 0, 0, 0, 1 );
+		//	Rotate this joint's coord frame wrt parent's.
+		rotParentToCurrent.setRotation ( new Ammo.btVector3 ( 0, 1, 0 ), 
+										 Math.PI );
+		jointAxis	 = new Ammo.btVector3 ( 1, 0, 0 );	//	not a hinge
+		multiBody.setupPrismatic ( 
+			6,							//	Link index.
+			Dexter.FINGER_MASS,
+			linkInertiaDiag,
+			6 - 1,						//	Parent index.
+			rotParentToCurrent,
+			jointAxis	,
+			parentComToCurrentPivot,
+			currentPivotToCurrentCom,
+			true );					//	Disable parent collision.
+		*/
 
+		//	Add the moving finger as a fixed shape?
+		//
+		pop  = config.link6.obj.position;
+		ppwl = config.link6.bbDef.posWrtLink.getPosition();
+		pw2  = config.link6.bbDef.w / 2;
+		ph2  = config.link6.bbDef.h / 2;
+		pl2  = config.link6.bbDef.l / 2;
+	//	op   = config.finger.obj.position;
+		op   = config.finger.posWrtParent;
+		pwl  = config.finger.bbDef.posWrtLink.getPosition();
+		w2   = config.finger.bbDef.w / 2;
+		h2   = config.finger.bbDef.h / 2;
+		l2   = config.finger.bbDef.l / 2;
+		//	Vector from parent COM to joint axis in parent's frame.
+		x = (op.x / 10) - (ppwl.x / 10);
+		y = (op.y / 10) - (ppwl.y / 10);
+		z = (op.z / 10) - (ppwl.z / 10);
+		parentComToCurrentPivot = new Ammo.btVector3 ( x, y, z );
+		//	Vector from joint axis to curent COM in current frame.
+		x =  pwl.x / 10;
+		y =  pwl.y / 10;
+		z =  pwl.z / 10;
+		currentPivotToCurrentCom = new Ammo.btVector3 ( x, y, z );
+		linkHalfExtents.push ( new Ammo.btVector3 ( l2, h2, w2 ) );
+		shape = new Ammo.btBoxShape ( linkHalfExtents[6] );
+		linkInertiaDiag = new Ammo.btVector3 ( 0, 0, 0 );
+		shape.calculateLocalInertia ( Dexter.FINGER_MASS, linkInertiaDiag );
+		Ammo.destroy ( shape );
+		shape = null;
+		rotParentToCurrent = new Ammo.btQuaternion ( 0, 0, 0, 1 );
+		//	Rotate this joint's coord frame wrt parent's.
+		rotParentToCurrent.setRotation ( new Ammo.btVector3 ( 0, 1, 0 ), 
+										 Math.PI );
+		multiBody.setupFixed ( 
+			6,							//	Link index.
+			Dexter.FINGER_MASS,
+			linkInertiaDiag,
+			6 - 1,						//	Parent index.
+			rotParentToCurrent,
+			parentComToCurrentPivot,
+			currentPivotToCurrentCom );
+
+		
 		multiBody.finalizeMultiDof();
 
 		world.addMultiBody ( multiBody );
@@ -502,8 +782,8 @@ let dynamics2 = ( function() {
 
 		multiBody.setUseGyroTerm ( false );
 
-		multiBody.setLinearDamping ( 0.10 );
-		multiBody.setAngularDamping ( 2.00 );
+		multiBody.setLinearDamping ( 2.00 );
+		multiBody.setAngularDamping ( 1.00 );
 
 		//	Collisions
 		//
@@ -525,12 +805,12 @@ let dynamics2 = ( function() {
 		
 		shape = new Ammo.btBoxShape ( baseHalfExtents );
 		colsn = new Ammo.btMultiBodyLinkCollider ( multiBody, -1 );
+		colsn.setUserIndex ( colliders.length );
 		colsn.setCollisionShape ( shape );
 
-		//	Is this necessary?
 		tr = new Ammo.btTransform();
 		tr.setIdentity();
-		let lo = local_origin[0];
+	//	let lo = local_origin[0];
 	//	tr.setOrigin ( new Ammo.btVector3 ( lo.x(), lo.y(), lo.z() ) );
 		tr.setOrigin ( new Ammo.btVector3 ( 0,
 											baseHalfExtents.y(), 
@@ -547,6 +827,7 @@ let dynamics2 = ( function() {
 		multiBody.setBaseCollider ( colsn );
 		colliders.push ( { name:	'base',
 						   partOf:	'robot',
+						   isBlock:	false,
 						   exts:	baseHalfExtents,
 						   colsn:	colsn } );
 
@@ -583,6 +864,7 @@ let dynamics2 = ( function() {
 		shape = new Ammo.btBoxShape ( linkHalfExtents[0] );
 		shapes.push ( shape );
 		colsn = new Ammo.btMultiBodyLinkCollider ( multiBody, 0 );
+		colsn.setUserIndex ( colliders.length );
 		colsn.setCollisionShape ( shape );
 		tr = new Ammo.btTransform();
 		tr.setIdentity();
@@ -598,6 +880,7 @@ let dynamics2 = ( function() {
 		link.set_m_collider ( colsn );
 		colliders.push ( { name:	'link-1',
 						   partOf:	'robot',
+						   isBlock:	false,
 						   exts:	linkHalfExtents[0],
 						   colsn:	colsn } );
 		
@@ -608,6 +891,7 @@ let dynamics2 = ( function() {
 		shape = new Ammo.btBoxShape ( linkHalfExtents[1] );
 		shapes.push ( shape );
 		colsn = new Ammo.btMultiBodyLinkCollider ( multiBody, 1 );
+		colsn.setUserIndex ( colliders.length );
 		colsn.setCollisionShape ( shape );
 		tr = new Ammo.btTransform();
 		tr.setIdentity();
@@ -623,6 +907,7 @@ let dynamics2 = ( function() {
 		link.set_m_collider ( colsn );
 		colliders.push ( { name:	'link-2',
 						   partOf:	'robot',
+						   isBlock:	false,
 						   exts:	linkHalfExtents[1],
 						   colsn:	colsn } );
 
@@ -633,6 +918,7 @@ let dynamics2 = ( function() {
 		shape = new Ammo.btBoxShape ( linkHalfExtents[2] );
 		shapes.push ( shape );
 		colsn = new Ammo.btMultiBodyLinkCollider ( multiBody, 2 );
+		colsn.setUserIndex ( colliders.length );
 		colsn.setCollisionShape ( shape );
 		tr = new Ammo.btTransform();
 		tr.setIdentity();
@@ -648,6 +934,7 @@ let dynamics2 = ( function() {
 		link.set_m_collider ( colsn );
 		colliders.push ( { name:	'link-3',
 						   partOf:	'robot',
+						   isBlock:	false,
 						   exts:	linkHalfExtents[2],
 						   colsn:	colsn } );
 		
@@ -658,6 +945,7 @@ let dynamics2 = ( function() {
 		shape = new Ammo.btBoxShape ( linkHalfExtents[3] );
 		shapes.push ( shape );
 		colsn = new Ammo.btMultiBodyLinkCollider ( multiBody, 3 );
+		colsn.setUserIndex ( colliders.length );
 		colsn.setCollisionShape ( shape );
 		tr = new Ammo.btTransform();
 		tr.setIdentity();
@@ -673,6 +961,7 @@ let dynamics2 = ( function() {
 		link.set_m_collider ( colsn );
 		colliders.push ( { name:	'link-4',
 						   partOf:	'robot',
+						   isBlock:	false,
 						   exts:	linkHalfExtents[3],
 						   colsn:	colsn } );
 
@@ -683,6 +972,7 @@ let dynamics2 = ( function() {
 		shape = new Ammo.btBoxShape ( linkHalfExtents[4] );
 		shapes.push ( shape );
 		colsn = new Ammo.btMultiBodyLinkCollider ( multiBody, 4 );
+		colsn.setUserIndex ( colliders.length );
 		colsn.setCollisionShape ( shape );
 		tr = new Ammo.btTransform();
 		tr.setIdentity();
@@ -698,6 +988,7 @@ let dynamics2 = ( function() {
 		link.set_m_collider ( colsn );
 		colliders.push ( { name:	'link-5',
 						   partOf:	'robot',
+						   isBlock:	false,
 						   exts:	linkHalfExtents[4],
 						   colsn:	colsn } );
 
@@ -705,10 +996,27 @@ let dynamics2 = ( function() {
 		//	
 		posr = local_origin[6];
 		wtl  = world_to_local[6];
+		colsn = new Ammo.btMultiBodyLinkCollider ( multiBody, 5 );
+		colsn.setUserIndex ( colliders.length );
+
 		shape = new Ammo.btBoxShape ( linkHalfExtents[5] );
 		shapes.push ( shape );
-		colsn = new Ammo.btMultiBodyLinkCollider ( multiBody, 5 );
 		colsn.setCollisionShape ( shape );
+
+	//	compoundShape = new Ammo.btCompoundShape ( true, 2 );
+	//	shape = new Ammo.btBoxShape ( linkHalfExtents[5] );
+	//	localTransform = new Ammo.btTransform ( );
+	//	localTransform.setIdentity();
+	//	compoundShape.addChildShape ( localTransform, shape );
+	//	shape = new Ammo.btBoxShape ( linkHalfExtents[5] );
+	//	localTransform = new Ammo.btTransform ( );
+	//	localTransform.setIdentity();
+	//	localTransform.setOrigin ( new Ammo.btVector3 ( config.link6.finger.x, 
+	//													0, 0 ) );
+	//	compoundShape.addChildShape ( localTransform, shape );
+	//	shapes.push ( compoundShape );
+	//	colsn.setCollisionShape ( compoundShape );
+
 		tr = new Ammo.btTransform();
 		tr.setIdentity();
 		tr.setOrigin ( posr );
@@ -723,9 +1031,69 @@ let dynamics2 = ( function() {
 		link.set_m_collider ( colsn );
 		colliders.push ( { name:	'link-6',
 						   partOf:	'robot',
+						   isBlock:	false,
 						   exts:	linkHalfExtents[5],
-						   colsn:	colsn } );
+						   colsn:	colsn,
+						   shape:	compoundShape } );
 
+		/*	The moving finger pad is part of the compound shape of link 6.
+		//	Collisions - Link 7 - Moving Finger
+		//	
+		posr = local_origin[7];
+		wtl  = world_to_local[7];
+		shape = new Ammo.btBoxShape ( linkHalfExtents[6] );
+		shapes.push ( shape );
+		colsn = new Ammo.btMultiBodyLinkCollider ( multiBody, 6 );
+		colsn.setUserIndex ( colliders.length );
+		colsn.setCollisionShape ( shape );
+		tr = new Ammo.btTransform();
+		tr.setIdentity();
+		tr.setOrigin ( posr );
+		orn = new Ammo.btQuaternion ( -wtl.x(), -wtl.y(), -wtl.z(), wtl.w() );
+		tr.setRotation ( orn );
+		colsn.setWorldTransform ( tr );
+		collisionFilterGroup = CollisionFilter.DefaultFilter;
+		collisionFilterMask  = CollisionFilter.AllFilter;
+		world.addCollisionObject ( colsn, collisionFilterGroup, 
+										  collisionFilterMask );
+		link = multiBody.getLink ( 6 );
+		link.set_m_collider ( colsn );
+		colliders.push ( { name:	'finger',
+						   partOf:	'robot',
+						   isBlock:	false,
+						   exts:	linkHalfExtents[6],
+						   colsn:	colsn } );
+		*/
+
+		//	The moving finger is a fixed link.
+		//	
+		posr = local_origin[7];
+		wtl  = world_to_local[7];
+		shape = new Ammo.btBoxShape ( linkHalfExtents[6] );
+		shapes.push ( shape );
+		colsn = new Ammo.btMultiBodyLinkCollider ( multiBody, 6 );
+		colsn.setUserIndex ( colliders.length );
+		colsn.setCollisionShape ( shape );
+		tr = new Ammo.btTransform();
+		tr.setIdentity();
+		tr.setOrigin ( posr );
+		orn = new Ammo.btQuaternion ( -wtl.x(), -wtl.y(), -wtl.z(), wtl.w() );
+		tr.setRotation ( orn );
+		colsn.setWorldTransform ( tr );
+		collisionFilterGroup = CollisionFilter.DefaultFilter;
+		collisionFilterMask  = CollisionFilter.AllFilter;
+		world.addCollisionObject ( colsn, collisionFilterGroup, 
+										  collisionFilterMask );
+		link = multiBody.getLink ( 6 );
+		link.set_m_collider ( colsn );
+		ppwl = config.link6.bbDef.posWrtLink.getPosition();
+		op   = config.finger.posWrtParent;
+		colliders.push ( { name:	'finger',
+						   partOf:	'robot',
+						   isBlock:	false,
+						   exts:	linkHalfExtents[6],
+						   colsn:	colsn,
+						   x:		(op.x / 10) - (ppwl.x / 10) } );
 
 		if ( ! multiBody ) {
 			return null; }
@@ -742,6 +1110,36 @@ let dynamics2 = ( function() {
 		return multiBody;
 
 	};	//	createMultiBody()
+
+	self.createJointMotors = function() {
+		const sW = 'dynamics2 createJointMotors()';
+		if ( ! world ) {
+			console.error ( sW + ': call createEmptyDynamicsWorld() before '
+							   + 'this' );
+			return; }
+		if ( ! multiBody ) {
+			console.error ( sW + ': call createMultiBody() before this' );
+			return; }
+
+		jointMotors = [];
+
+		let i = null, numDofs = multiBody.getNumDofs();
+
+		for ( i = 0; i < numDofs; i++ ) {
+			let motor 
+				= new Ammo.btMultiBodyJointMotor ( multiBody,
+												   i,	//	link index
+												   0,	//	dof index
+												   0,	//	desired velocity
+												   1 );	//	max impulse
+			motor.setPositionTarget ( 0, 0 );
+			motor.setVelocityTarget ( 0, 1 );
+			multiBody.getLink ( i ).m_userPtr = motor.ptr;
+			world.addMultiBodyConstraint ( motor );
+			motor.finalizeMultiDof();
+			jointMotors.push ( motor ); }
+
+	}	//	createJointMotors()
 
 	//	This (including the comments) is pretty much copied from Bullet3's 
 	//	InverseDynamicsExample::stepSimulation().
@@ -767,9 +1165,9 @@ let dynamics2 = ( function() {
 		let pd_control	= null;
 		
 		if ( ! multiBody ) {
-			jc.splice ( 0, 0, 0, 0, 0, 0, 0, 0 );
-			jv.splice ( 0, 0, 0, 0, 0, 0, 0, 0 );
-			jt.splice ( 0, 0, 0, 0, 0, 0, 0, 0 ); }
+			jc.splice ( 0, 0, 0, 0, 0, 0, 0, 0, 0 );
+			jv.splice ( 0, 0, 0, 0, 0, 0, 0, 0, 0 );
+			jt.splice ( 0, 0, 0, 0, 0, 0, 0, 0, 0 ); }
 
 		if ( multiBody ) {
 			num_dofs = multiBody.getNumDofs();
@@ -820,6 +1218,15 @@ let dynamics2 = ( function() {
 				nu.set ( dof,  a );
 			}
 
+		//	//	The moving finger collision shape is part of link 6. Update
+		//	//	its position.
+		//	let c6 = colliders.find ( c => c.name === 'link-6' );
+		//	if ( c6 ) {
+		//		let lt = new Ammo.btTransform();	//	local transform
+		//		lt.setIdentity();
+		//		lt.setOrigin ( new Ammo.btVector3 ( qd[6], 0, 0 ) );
+		//		c6.shape.updateChildTransform ( 1, lt, true ); }
+
 			nSteps += 1;
 
 			if ( useInverseModel ) {
@@ -850,8 +1257,8 @@ let dynamics2 = ( function() {
 					//	No model: just apply PD control law.
 					multiBody.addJointTorque ( dof, pd_control.get ( dof ) );
 				}
-				jv.splice ( 0, 0, 0, 0, 0, 0, 0, 0 );		//	for now
-				jt.splice ( 0, 0, 0, 0, 0, 0, 0, 0 );		//
+				jv.splice ( 0, 0, 0, 0, 0, 0, 0, 0, 0 );		//	for now
+				jt.splice ( 0, 0, 0, 0, 0, 0, 0, 0, 0 );		//
 			}
 		}	//	if ( multiBody )
 	
@@ -888,27 +1295,175 @@ let dynamics2 = ( function() {
 
 	};	//	stepSimulation()
 
-	self.getCollisionObjectPositions = function() {
+
+	self.stepSimulation2 = function ( deltaTime,
+									  qd,			//	joint target values
+									  jc,			//	joint current values
+									  kp, kd,
+									  jv,			//	joint velocities
+									  jt,			//	joint torques
+									  ground,
+									  blocks ) {
+
+		let num_dofs = 0;
+
+		if ( ! multiBody ) {
+			jc.splice ( 0, 0, 0, 0, 0, 0, 0, 0, 0 );
+			jv.splice ( 0, 0, 0, 0, 0, 0, 0, 0, 0 );
+			jt.splice ( 0, 0, 0, 0, 0, 0, 0, 0, 0 ); }
+
+		if ( multiBody ) {
+			num_dofs = multiBody.getNumDofs(); 
+
+			//	Set the position of the fixed link.
+		//	let x = (op.x / 10) - (ppwl.x / 10);
+			let c7 = colliders.find ( c => c.name === 'finger' );
+			if ( c7 ) {
+				let x = c7.x  + qd[6];
+				multiBody.getLink ( 6 ).setX ( x ); } }
+			
+
+		if ( jointMotors ) {
+			jointMotors.forEach ( ( motor, i ) => {
+				let desiredVelocity = 0.1;
+				let desiredPosition = qd[i];
+				let maxImp = 1000 * deltaTime;
+				motor.setVelocityTarget ( desiredVelocity, kd );
+				motor.setPositionTarget ( desiredPosition, kp );
+				motor.setMaxAppliedImpulse ( maxImp );
+			} ); }
+			
+		if ( world ) {
+		//	//	The moving finger collision shape is part of link 6. Update
+		//	//	its position.
+		//	let c6 = colliders.find ( c => c.name === 'link-6' );
+		//	if ( c6 ) {
+		//		let lt = new Ammo.btTransform();	//	local transform
+		//		lt.setIdentity();
+		//		lt.setOrigin ( new Ammo.btVector3 ( qd[6], 0, 0 ) );
+		//		c6.shape.updateChildTransform ( 1, lt, true ); }
+		
+			if ( multiBody ) {
+				for ( let dof = 0; dof < num_dofs; dof++ ) {
+					let dampingCoefficient = 0.1;
+					let damping = -dampingCoefficient 
+									* multiBody.getJointVel ( dof );
+					multiBody.addJointTorque ( dof, damping ); } }
+
+			world.stepSimulation ( deltaTime, 1 ); }
+
+		if ( multiBody ) {
+			for ( let dof = 0; dof < num_dofs; dof++ ) {
+				jc.push ( multiBody.getJointPos ( dof ) ); 
+				jv.push ( multiBody.getJointVel ( dof ) );
+				jt.push ( multiBody.getJointTorque ( dof ) ); } }
+
+		if ( self.ground ) {
+		//	ground.ammoQ = self.ground.getWorldToBaseRot();
+		//	ground.ammoP = self.ground.getBasePos(); }
+			ground.ammoQ = self.ground.getOrientation();
+			ground.ammoP = self.ground.getCenterOfMassPosition(); }
+			
+		if ( self.blocks ) {
+			self.blocks.forEach ( b => {
+			//	self.setBlockColliderWorldTransform ( b );
+				let o  = b.block.getOrientation();
+				let bo = new Ammo.btQuaternion ( o.x(), o.y(), o.z(), o.w() );
+				blocks.push ( { name:	b.name,
+							//	ammoQ:	b.block.getWorldToBaseRot(),
+							//	ammoP:	b.block.getBasePos() } );
+								ammoQ:	bo,
+								ammoP:	b.block.getCenterOfMassPosition() } );
+			} ); }
+	}	//	stepSimulation2()
+
+
+	self.getCollisionObjectPositions = function ( overlappingObjects ) {
 		let poses = [];
 		colliders.forEach ( col => {
-			let t = col.colsn.getWorldTransform();
-			let o = t.getOrigin();
-			let q = t.getRotation();
-		//	if ( col.name === 'block-a' ) {
-		//		q = q.inverse(); }
-			poses.push ( { name:	col.name,
-						   partOf:	col.partOf,
-						   w:	col.exts.x() * 2,
-						   h:	col.exts.y() * 2,
-						   l:	col.exts.z() * 2,
-						   px:	o.x(),
-						   py:	o.y(),
-						   pz:	o.z(),
-						   qx:	q.getAxis().x(),
-						   qy:	q.getAxis().y(),
-						   qz:	q.getAxis().z(),
-						   qa:	q.getAngle() } );
+			if ( col.colsn ) {
+				let t = col.colsn.getWorldTransform();
+				let o = t.getOrigin();
+				let q = t.getRotation();
+			//	if ( col.name === 'block-a' ) {
+			//		q = q.inverse(); }
+				poses.push ( { name:	col.name,
+							   partOf:	col.partOf,
+							   isBlock:	col.isBlock,
+							   w:	col.exts.x() * 2,
+							   h:	col.exts.y() * 2,
+							   l:	col.exts.z() * 2,
+							   px:	o.x(),
+							   py:	o.y(),
+							   pz:	o.z(),
+							   qx:	q.getAxis().x(),
+							   qy:	q.getAxis().y(),
+							   qz:	q.getAxis().z(),
+							   qa:	q.getAngle() } );
+				if ( (col.name === 'link-6') && col.shape ) {
+					let cs = col.shape;						//	compound shape
+					let tr = cs.getChildTransform ( 1 );	//	moving finger
+					t = t.op_mul ( tr );
+					let o = t.getOrigin();
+					let q = t.getRotation();
+					poses.push ( { name:	'finger',
+								   partOf:	col.partOf,
+								   isBlock:	col.isBlock,
+								   w:	col.exts.x() * 2,
+								   h:	col.exts.y() * 2,
+								   l:	col.exts.z() * 2,
+								   px:	o.x(),
+								   py:	o.y(),
+								   pz:	o.z(),
+								   qx:	q.getAxis().x(),
+								   qy:	q.getAxis().y(),
+								   qz:	q.getAxis().z(),
+								   qa:	q.getAngle() } ); }
+				if ( col.partOf === 'world' ) {
+					let n = col.colsn.getNumOverlappingObjects();
+					if ( n > 0 ) {
+						let oo = { name:	col.name,
+								   lappers:	[] };
+						for ( let i = 0; i < n; i++ ) {
+							let co = col.colsn.getOverlappingObject ( i );
+							let collider = colliders[co.getUserIndex()];
+							oo.lappers.push ( collider.name ); }
+						overlappingObjects.push ( oo ); } } }
 		} );
+
+	//	if ( broadphase ) {
+	//		let pc   = broadphase.getOverlappingPairCache();
+	//		let pair = new Ammo.btCollidingPair();
+	//		let i = 0;
+	//		while ( true ) {
+	//			if ( pc.getCollidingPair ( i, pair ) ) {
+	//				let oo = { a: pair.idx0 >= 0 ? colliders[pair.idx0]
+	//											 : { name: '?' },
+	//						   b: pair.idx1 >= 0 ? colliders[pair.idx1]
+	//											 : { name: '?' } };
+	//				overlappingObjects.push ( oo );
+	//				i += 1; }
+	//			else {
+	//				break; } } }
+
+		if ( dispatcher ) {
+			let numManifolds = dispatcher.getNumManifolds();
+			for ( let i = 0; i < numManifolds; i++ ) {
+				let contactManifold 
+					= dispatcher.getManifoldByIndexInternal ( i );
+				let numContacts = contactManifold.getNumContacts();
+				if ( numContacts < 1 ) {
+					continue; }
+				//	Collision Objects
+				let co0 = contactManifold.getBody0();
+				let co1 = contactManifold.getBody1();
+				let idx0 = co0.getUserIndex();
+				let idx1 = co1.getUserIndex();
+				let oo = { a: idx0 >= 0 ? colliders[idx0] : { name: '?' },
+						   b: idx1 >= 0 ? colliders[idx1] : { name: '?' },
+						   numContacts: numContacts };
+				overlappingObjects.push ( oo ); } }
+
 		return poses;
 	}	//	getCollisionObjectPositions()
 

@@ -65,6 +65,34 @@ class JointGUIHelper {
 	}
 }	//	JointGUIHelper()
 
+class FingerGUIHelper {
+	constructor ( app, finger ) {
+		this.app	= app;
+		this.finger	= finger;
+	}
+	get f() {
+		let v = this.app.ee[this.finger].value;
+		return v;
+	}
+	set f(v) {
+		this.app.ee[this.finger].value = v;
+	}
+}	//	FingerGUIHelper()
+
+class FingerPadMakerGUIHelper {
+	constructor ( app, param ) {
+		this.app   = app;
+		this.param = param;
+	}
+	get p() {
+		let v = this.app.fpm[this.param].value;
+		return v;
+	}
+	set p(v) {
+		this.app.fpm[this.param].value = v;
+	}
+}	//	FingerPadMakerGUIHelper()
+
 
 class App extends React.Component {
 	constructor ( props ) {
@@ -111,6 +139,10 @@ class App extends React.Component {
 		this.createKpKdControls	= this.createKpKdControls.bind ( this );
 		this.createJointControls
 								= this.createJointControls.bind ( this );
+		this.createEndEffectorControls
+								= this.createEndEffectorControls.bind ( this );
+		this.createFingerPadControls
+								= this.createFingerPadControls.bind ( this );
 		this.createLoResDexter	= this.createLoResDexter.bind ( this );
 		this.createGround		= this.createGround.bind ( this );
 		this.createBlocks		= this.createBlocks.bind ( this );
@@ -122,6 +154,11 @@ class App extends React.Component {
 		this.draw_arm			= this.draw_arm.bind ( this );
 		this.createCoordFrame	= this.createCoordFrame.bind ( this );
 
+		this.moveCamera			= this.moveCamera.bind ( this );
+		this.graspBlock			= this.graspBlock.bind ( this );
+		this.releaseBlock		= this.releaseBlock.bind ( this );
+		this.scriptStatement	= this.scriptStatement.bind ( this );
+		this.stepScript			= this.stepScript.bind ( this );
 		this.runScript			= this.runScript.bind ( this );
 		this.cycleBoundingBox	= this.cycleBoundingBox.bind ( this );
 		this.resizeRendererToDisplaySize
@@ -129,29 +166,34 @@ class App extends React.Component {
 
 	//	this.kp =  100;			//	Spring
 	//	this.kp = 6500;			//	Spring
-		this.kp =  400;			//	Spring
-	//	this.kp =  800;			//	Spring
+	//	this.kp =  400;			//	Spring
+	//	this.kp =  880;			//	Spring
+		this.kp =   70;			//	Spring
 
 	//	this.kd =   20;			//	Damping
 	//	this.kd =  150;			//	Damping
-		this.kd =   80;			//	Damping
+	//	this.kd =   80;			//	Damping
+	//	this.kd =   60;			//	Damping
+		this.kd = 1000;			//	Damping
 
-		this.jt	= {};			//	Joint target values.
+		this.jt	= {};			//	Joint Target values.
+		this.ee = {};			//	End Effector values.
 
 		this.updateGauges		= this.updateGauges.bind ( this );
 
 		this.chainLink			= this.chainLink.bind (this );
 		this.gatherBoundingBoxes	= this.gatherBoundingBoxes.bind ( this );
 		this.defineBoundingBox	= this.defineBoundingBox.bind ( this );
-		this.createBoundingBox	= this.createBoundingBox.bind ( this );
+	//	this.createBoundingBox	= this.createBoundingBox.bind ( this );
+		this.createFingerPad	= this.createFingerPad.bind ( this );
+		this.attachFingerPad	= this.attachFingerPad.bind ( this );
 		this.setTransparent		= this.setTransparent.bind ( this );
+		this.castShadow			= this.castShadow.bind ( this );
 		this.getLinks			= this.getLinks.bind ( this );
 
 		this.render3D			= this.render3D.bind ( this );
 
 		this.doAll				= this.doAll.bind ( this );
-
-		this.h_count = 0;
 
 		this.fncControls = null;
 		this.fncJoint1Gauges = null;
@@ -184,10 +226,18 @@ class App extends React.Component {
 		this.iHiResBB	= 0;
 		
 		this.bLoResDynamicsEnabled	= false;
+		this.bLoResStepSim			= false;;
 		this.bCreateLoResDexter		= false;
 		this.bLoResMoveEnabled		= false;
 
+		this.bCreateStationaryFingerPad	= false;
+		this.bGotStationaryFingerPad	= true;
+		this.bCreateMovingFingerPad		= false;
+		this.bGotMovingFingerPad		= true;
+		this.mfpf						= 0.022;	//	Mvg Fgr Pad Fudge
+
 		this.bHiResDynamicsEnabled	= true;
+		this.bHiResStepSim			= true;
 		this.bCreateHiResDexter		= true;
 		this.bHiResMoveEnabled		= true;;
 
@@ -199,6 +249,61 @@ class App extends React.Component {
 		this.bShowingCOPs	= false;
 		this.COPs 			= [];		//	Collision Object Position
 
+		//	Finger Pad Maker
+		this.fpm			= { wf: null };		//	WireFrame
+
+		this.dropBlocksFrom = { x:	-0.5, 
+								y:	 0.5, 
+								z:	-0.5 };
+		
+		this.lastOlosLength = 0;
+		
+		//	Script statements.
+		this.script = [
+			{ j1:  46, j2: -76, j3: -28, j4:  20,  j5:  -4,	j6:  72, v0: 0.2 },
+			{ camera: { atX: 0.49, atY: 0.03, atZ: -0.34,
+						fmX: 1.12, fmY: 0.62, fmZ:  0.78 } },
+			{ j1:  46, j2: -83, j3: -28, j4:  20,  j5:  -4,	j6:  72, v0: 0.2 },
+			{ j1:  44, j2: -76, j3: -38, j4:  32,  j5:  -4,	j6:  72, v0: 0.2 },
+			{ j1:  40, j2: -80, j3: -34, j4:  32,  j5:  -4,	j6:  72, v0: 0.2 },
+			{ j1:  40, j2: -80, j3: -33, j4:  32,  j5:  -4,	j6:  69, v0: 0.2 },
+			{ j1:  40, j2: -77, j3: -39, j4:  36,  j5:  -4,	j6:  69, v0: 0.2 },
+			{ f: 0.50, v0: 0.2 },
+			{ j1:  40, j2: -80, j3: -33, j4:  36,  j5:  -4,	j6:  69, v0: 0.2 },
+			{ j1:  38, j2: -80, j3: -33, j4:  36,  j5:  -4,	j6:  69, v0: 0.2 },
+			{ pause:	500 },
+			{ f: 0.43, v0: 0.2 },
+			{ pause:	500 },
+			{ f: 0.38, v0: 0.2 },
+			{ pause:	500 },
+			{ f: 0.34, v0: 0.2 },
+			{ pause:	500 },
+			{ f: 0.30, v0: 0.2 },
+		//	Should be contact on both pads. 
+		//	Disable collision contact on pads, or/and block.
+		//	Attach block to link 6.
+		//	...
+			{ grab: { blk: 'block-x', numContacts: 1, nAttempts: 10 } },
+
+			//	Move up.
+			{ j1:  38, j2: -77, j3: -33, j4:  36,  j5:  -4,	j6:  69, v0: 0.2 },
+			{ camera: { atX: 0.11, atY: 0.22, atZ: -0.08,
+						fmX: 3.75, fmY: 1.41, fmZ:  1.52 } },
+			{ j1:  38, j2: -45, j3:  -90, j4: 45,  j5:  -4,	j6:  69, v0: 0.2 },
+			{ j1:  38, j2: -25, j3: -125, j4: 60,  j5:  -4,	j6:  69, v0: 0.2 },
+			{ camera: { atX:  0.15, atY: 0.20, atZ: -0.35,
+						fmX: -3.13, fmY: 0.67, fmZ: -2.85 } },
+			{ j1: 143, j2: -25, j3: -125, j4: 60,  j5:  -4,	j6:  69, v0: 0.2 },
+			{ camera: { atX:  0.06, atY: 0.33, atZ: -0.36,
+						fmX:  2.52, fmY: 1.67, fmZ: -4.94 } },
+			{ j1: 135, j2: -63, j3: -39, j4:  60,  j5:  -4,	j6:  69, v0: 0.2 },
+			{ f: 0.43, v0: 0.2 },
+			{ release: { } },
+		];
+		this.iScript	= 0;		//	Script statement index
+
+		this.grasping	= null;		//	Set to name of block when is block
+									//	is grasped.
 	}	//	constructor()
 
 	makeXYZGUI ( parent, vector3, name, onChangeFn ) {
@@ -226,7 +331,7 @@ class App extends React.Component {
 			if ( self.lookAtYCtrl ) { 
 				self.lookAtYCtrl.setValue ( oc.target.y ); }
 			if ( self.lookAtZCtrl ) { 
-				self.lookAtZCtrl.setValue ( oc.target.z ); }
+				self.lookAtZCtrl.setValue ( oc.target.getComponent ( 2 ) ); }
 			let p = self.camera.position;
 			if ( self.lookFmXCtrl ) {
 				self.lookFmXCtrl.setValue ( p.x ) ; }
@@ -252,6 +357,8 @@ class App extends React.Component {
 	showCoordFrames ( o ) {
 		this.bShowingCoordFrames = o.bShow;
 		this.coordFrames.forEach ( cf => cf.visible = o.bShow );
+		//	The world origin is always visible. For now.
+		this.coordFrames[0].visible = true;
 	}	//	showCoordFrames()
 
 	showCOPs ( o ) {
@@ -294,8 +401,9 @@ class App extends React.Component {
 	//	this.camera.position.set ( 2.11, 0.77, -0.46 );
 	//	this.camera.position.set ( 2.13, 0.63, -0.89 );
 	//	this.camera.position.set ( 2.38, 0.25,  0.00 );
-		this.camera.position.set ( 1.41, 0.90,  0.00 );
+	//	this.camera.position.set ( 1.41, 0.90,  0.00 );
 	//	this.camera.position.set ( 2.10, 0.05,  0.00 );
+		this.camera.position.set ( 2.68, 3.29,  5.18 );
 
 		this.orbitControls = new OrbitControls ( this.camera, this.canvas );
 
@@ -303,8 +411,9 @@ class App extends React.Component {
 	//	this.orbitControls.target.set ( -0.07, 0.07, 0.12 );
 	//	this.orbitControls.target.set (  0.02, 0.17, 0.06 );
 	//	this.orbitControls.target.set (  0.00, 0.17, 0.00 );
-		this.orbitControls.target.set (  0.00, 0.90, 0.00 );
+	//	this.orbitControls.target.set (  0.00, 0.90, 0.00 );
 	//	this.orbitControls.target.set (  0.00, 0.16, 0.00 );
+		this.orbitControls.target.set ( -0.05, 0.36, -0.04 ); 
 
 		this.orbitControls.update();
 
@@ -312,13 +421,13 @@ class App extends React.Component {
 	//	folder.open();
 		let target   = this.orbitControls.target;
 		let position = this.camera.position;
-		this.lookAtX = target.x;
+		this.lookAtX = target.getComponent ( 0 );
 		this.lookAtXCtrl = folder.add ( this, 'lookAtX', -5, 5, 0.01 )
 			.name ( 'Look At X' ); 
-		this.lookAtY = target.y;
+		this.lookAtY = target.getComponent ( 1 );
 		this.lookAtYCtrl = folder.add ( this, 'lookAtY', -5, 5, 0.01 )
 			.name ( 'Look At Y' ); 
-		this.lookAtZ = target.z;
+		this.lookAtZ = target.getComponent ( 2 );
 		this.lookAtZCtrl = folder.add ( this, 'lookAtZ', -5, 5, 0.01 )
 			.name ( 'Look At Z' ); 
 		this.lookFmX = position.x;
@@ -374,8 +483,6 @@ class App extends React.Component {
 			//	Update the light target's matrixWorld because it's needed 
 			//	by the helper
 			light.target.updateMatrixWorld();
-			if ( helper ) {
-				helper.update(); }
 			//	Update the light's shadow camera's projection matrix.
 			light.shadow.camera.updateProjectionMatrix();
 			//	And now update the camera helper we're using to show the 
@@ -470,7 +577,8 @@ class App extends React.Component {
 		folder.add ( kpkdGUIHelper, 'k', 0, 1000, 1 ).name ( 'Kp' );
 		kpkdGUIHelper = new KPKDGUIHelper ( this, 'kd' );
 	//	folder.add ( kpkdGUIHelper, 'k', 0,  100,  80 ).name ( 'Kd' );
-		folder.add ( kpkdGUIHelper, 'k', 0,  100,  1 ).name ( 'Kd' );
+	//	folder.add ( kpkdGUIHelper, 'k', 0,  100,  1 ).name ( 'Kd' );
+		folder.add ( kpkdGUIHelper, 'k', 0, 2000,  1 ).name ( 'Kd' );
 	}	//	createKpKdControls()
 
 	createJointControls() {
@@ -510,6 +618,84 @@ class App extends React.Component {
 		this.jt['J6'].ctrl = ctrl;
 	}	//	createJointControls()
 	
+	createEndEffectorControls() {
+		let folder = this.gui.addFolder ( 'End Effector' );
+		folder.open();
+		let fingerGUIHelper = null;
+		let ctrl = null;
+
+		this.ee['Finger'] = { axis:	'x', value: 0.24, ctrl: null };
+		fingerGUIHelper = new FingerGUIHelper ( this, 'Finger' );
+		ctrl = folder.add ( fingerGUIHelper, 'f', 0, 0.5, 0.01 )
+					 .name ( 'Finger' );
+		this.ee['Finger'].ctrl = ctrl;
+	}	//	createEndEffectorControls()
+
+	createFingerPadControls() {
+		let folder = this.gui.addFolder ( 'Create Finger Pad' );
+		folder.close();
+		let fpmGUIHelper = null;
+		let ctrl = null;
+		let self = this;
+
+		function change ( v ) {
+			let o = this.object;
+			console.log ( 'FPM ' + o.param + ' ' + v );
+			let fpm = o.app.fpm;
+			if ( ! fpm.wf ) {
+				return; }
+			if ( o.param === 'x' || o.param === 'y' || o.param === 'z' ) {
+				fpm.wf.position[o.param] = v; }
+			if ( o.param === 'w' || o.param === 'h' || o.param === 'l' ) {
+				let parent = fpm.wf.parent;
+				parent.remove ( fpm.wf );
+				fpm.wf = null;
+				let def = { x: fpm.x.value, y: fpm.y.value, z: fpm.z.value,
+							w: fpm.w.value, h: fpm.h.value, l: fpm.l.value };
+				self.createFingerPad ( parent, def );
+			} 
+		}	//	change()
+
+		this.fpm['x'] = { param:	'x', value: 0, ctrl: null };
+		fpmGUIHelper = new FingerPadMakerGUIHelper ( this, 'x' );
+		ctrl = folder.add ( fpmGUIHelper, 'p', -1, 1, 0.01 ).name ( 'X' );
+		this.fpm['x'].ctrl = ctrl;
+		ctrl.onChange ( change );
+
+		this.fpm['y'] = { param:	'y', value: 0 };
+		fpmGUIHelper = new FingerPadMakerGUIHelper ( this, 'y' );
+		ctrl = folder.add ( fpmGUIHelper, 'p', -1, 1, 0.01 ).name ( 'Y' );
+		this.fpm['y'].ctrl = ctrl;
+		ctrl.onChange ( change );
+
+		this.fpm['z'] = { param:	'z', value: 0 };
+		fpmGUIHelper = new FingerPadMakerGUIHelper ( this, 'z' );
+		ctrl = folder.add ( fpmGUIHelper, 'p', -1, 1, 0.01 ).name ( 'Z' );
+		this.fpm['z'].ctrl = ctrl;
+		ctrl.onChange ( change );
+
+		this.fpm['w'] = { param:	'w', value: 0.01 };
+		fpmGUIHelper = new FingerPadMakerGUIHelper ( this, 'w' );
+		ctrl = folder.add ( fpmGUIHelper, 'p', 0, 0.02, 0.001 )
+					 .name ( 'Width' );
+		this.fpm['w'].ctrl = ctrl;
+		ctrl.onChange ( change );
+
+		this.fpm['h'] = { param:	'h', value: 0.03 };
+		fpmGUIHelper = new FingerPadMakerGUIHelper ( this, 'h' );
+		ctrl = folder.add ( fpmGUIHelper, 'p', 0, 0.04, 0.001 )
+					 .name ( 'Height' );
+		this.fpm['h'].ctrl = ctrl;
+		ctrl.onChange ( change );
+
+		this.fpm['l'] = { param:	'l', value: 0.08 };
+		fpmGUIHelper = new FingerPadMakerGUIHelper ( this, 'l' );
+		ctrl = folder.add ( fpmGUIHelper, 'p', 0, 0.10, 0.001 )
+					 .name ( 'Length' );
+		this.fpm['l'].ctrl = ctrl;
+		ctrl.onChange ( change );
+	}	//	createFingerPadControls()
+
 	createLoResDexter() {
 		//	The base/legs.
 		sim.J0 = new THREE.Object3D();
@@ -600,32 +786,39 @@ class App extends React.Component {
 
 	createBlocks ( parent ) {
 		let self = this;
-		let numBlocks = 24, iBlock = 0;
+		let numBlocks = 23, iBlock = 0;
 		let color = '833';
-		function next() {
-			if ( iBlock >= numBlocks ) {
-				return; }
+		function ernk ( dropFrom ) {
 			//	Name 'block-a', 'block-b', 'block-c', ...
 			let name = 'block-' 
 				+ String.fromCharCode ( 'a'.charCodeAt ( 0 ) + iBlock );
 			//	Cycle the colors red, green, blue, red, green, ...
 			color = color.slice ( 1 ) + color.slice ( 0, 1 );
-			let block = self.createBlock ( name, parent, 0.04, 0.04, 0.04, 
-										   '#' + color );
+		//	let block = self.createBlock ( name, parent, 0.04, 0.04, 0.04, 
+			let block = self.createBlock ( name, parent, 0.03, 0.03, 0.03, 
+										   '#' + color, 
+										   dropFrom );
 			self.blocks[name] = block;
+		}
+		function next() {
+			if ( iBlock >= numBlocks ) {
+				ernk ( { x: 0.5, y: 0.1, z: -0.4 } );	//	one more
+				return; }
+			ernk ( self.dropBlocksFrom );
 			iBlock += 1;
-			window.setTimeout ( next, 500 ); }
+			window.setTimeout ( next, 100 ); }
 		next();
 	}	//	createBlocks()
 
-	createBlock ( name, parent, w, l, h, color ) {
+	createBlock ( name, parent, w, l, h, color, dropFrom ) {
 		let dyn = null;
 	//	if ( this.bLoResDynamicsEnabled ) {
 	//		dyn = dynamics; }
 		if ( this.bHiResDynamicsEnabled ) {
 			dyn = dynamics2; }
 		if ( dyn ) {
-			dyn.createBlock ( name, w, l, h ); }
+			let p = dropFrom ? dropFrom : this.dropBlocksFrom;
+			dyn.createBlock ( name, p.x, p.y, p.z, w, l, h ); }
 		const geo = new THREE.BoxGeometry ( w, h, l );
 		const mat = new THREE.MeshPhongMaterial ( 
 			{ color: (typeof color === 'string') ? color: '#683' } );
@@ -693,7 +886,7 @@ class App extends React.Component {
 		return arm;
 	}
 
-	createCoordFrame ( parent, scale, opacity, bWireframe ) {
+	createCoordFrame ( parent, scale, opacity, bWireframe, depthTest ) {
 		let obj = new THREE.Object3D();
 		let self = this;
 		let radCyl = 0.02;
@@ -707,7 +900,9 @@ class App extends React.Component {
 													     : 0;
 		bWireframe	= (typeof bWireframe === 'boolean') && bWireframe;
 
-		function arrow ( color, mtxCyl, mtxCon ) {
+		depthTest	= (typeof depthTest  === 'boolean') && depthTest;
+
+		function arrow ( name, color, mtxCyl, mtxCon ) {
 			let geo = null, mat = null, cylinder = null, cone = null;
 			geo = new THREE.CylinderGeometry ( radCyl,		//	radiusTop
 											   radCyl,		//	radiusBottom
@@ -718,19 +913,21 @@ class App extends React.Component {
 				let mat = lines.material;
 				mat.color = new THREE.Color ( color );
 				if ( opacity ) {
-					mat.depthTest	= false;
+					mat.depthTest	= depthTest;
 					mat.opacity		= opacity;
 					mat.transparent	= true; }
 				lines.applyMatrix ( mtxCyl.multiply ( mtxScale ) );
+				lines.name = 'Coord_Frame_' + name + '_Cylinder';
 			//	parent.add ( lines ); }
 				obj.add ( lines ); }
 			else {
 				mat = new THREE.MeshPhongMaterial ( { color: color } );
 				if ( opacity ) {
-					mat.depthTest	= false;
+					mat.depthTest	= depthTest;
 					mat.opacity		= opacity;
 					mat.transparent	= true; }
 				cylinder = new THREE.Mesh ( geo, mat );
+				cylinder.name = 'Coord_Frame_' + name + '_Cylinder';
 				cylinder.applyMatrix ( mtxCyl.multiply ( mtxScale ) );
 			//	parent.add ( cylinder ); }
 				obj.add ( cylinder ); }
@@ -743,14 +940,16 @@ class App extends React.Component {
 				let mat = lines.material;
 				mat.color = new THREE.Color ( color );
 				if ( opacity ) {
-					mat.depthTest	= false;
+					mat.depthTest	= depthTest;
 					mat.opacity		= opacity;
 					mat.transparent	= true; }
+				lines.applyMatrix ( mtxCon.multiply ( mtxScale ) );
 				lines.applyMatrix ( mtxCon.multiply ( mtxScale ) );
 			//	parent.add ( lines ); }
 				obj.add ( lines ); }
 			else {
 				cone   = new THREE.Mesh ( geo, mat );
+				cylinder.name = 'Coord_Frame_' + name + '_Cone';
 				cone.applyMatrix ( mtxCon.multiply ( mtxScale ) );
 			//	parent.add ( cone ); } }
 				obj.add ( cone ); } }
@@ -765,7 +964,7 @@ class App extends React.Component {
 		mtxCon.makeRotationZ ( -Math.PI / 2 );
 		vec = new THREE.Vector3 ( lenCyl + (hgtCon / 2), 0, 0 );
 		mtxCon.setPosition ( vec.multiplyScalar ( scale ) );
-		arrow ( 0xFF0000, mtxCyl, mtxCon );
+		arrow ( 'X', 0xFF0000, mtxCyl, mtxCon );
 			
 		mtxCyl = new THREE.Matrix4();
 		vec = new THREE.Vector3 ( 0, lenCyl / 2, 0 );
@@ -773,7 +972,7 @@ class App extends React.Component {
 		mtxCon = new THREE.Matrix4();
 		vec = new THREE.Vector3 ( 0, lenCyl + (hgtCon / 2), 0 );
 		mtxCon.setPosition ( vec.multiplyScalar ( scale ) );
-		arrow ( 0x00FF00, mtxCyl, mtxCon );
+		arrow ( 'Y', 0x00FF00, mtxCyl, mtxCon );
 		
 		mtxCyl = new THREE.Matrix4();
 		mtxCyl.makeRotationX ( Math.PI / 2 );
@@ -783,67 +982,182 @@ class App extends React.Component {
 		mtxCon.makeRotationX ( Math.PI / 2 );
 		vec = new THREE.Vector3 ( 0, 0, lenCyl + (hgtCon / 2) );
 		mtxCon.setPosition ( vec.multiplyScalar ( scale ) );
-		arrow ( 0x0000FF, mtxCyl, mtxCon );
+		arrow ( 'Z', 0x0000FF, mtxCyl, mtxCon );
 
 		obj.visible = this.bShowingCoordFrames;
 		parent.add ( obj );
 		this.coordFrames.push ( obj );
+		return obj;
 	}	//	createCoordFrame()
 
-	runScript ( o ) {
-		const sW = 'App runScript()';
-		console.log ( sW );
+	moveCamera ( to, cb ) {
+		let atX = this.lookAtX;
+		let atY = this.lookAtY;
+		let atZ = this.lookAtZ;
+		let fmX = this.lookFmX;
+		let fmY = this.lookFmY;
+		let fmZ = this.lookFmZ;
+
+		let dAtx = to.atX - atX;
+		let dAty = to.atY - atY;
+		let dAtz = to.atZ - atZ;
+		let dFmx = to.fmX - fmX;
+		let dFmy = to.fmY - fmY;
+		let dFmz = to.fmZ - fmZ
+		let self = this;
+		let nSteps = 80, i = 0;
+		function next() {
+			if ( i >= nSteps ) {
+				if ( cb ) {
+					cb(); }
+				return; }
+			atX += dAtx / nSteps;
+			atY += dAty / nSteps;
+			atZ += dAtz / nSteps;
+			fmX += dFmx / nSteps;
+			fmY += dFmy / nSteps;
+			fmZ += dFmz / nSteps;
+			self.orbitControls.target.set ( atX, atY, atZ ); 
+			self.camera.position.set ( fmX, fmY, fmZ );
+			self.orbitControls.update();
+			i += 1;
+			window.setTimeout ( next, 40 ); }
+		next();
+	}	//	moveCamera()
+
+	graspBlock ( blkName ) {
+		const sW = 'App graspBlock()';
+		let block = this.blocks[blkName];
+		if ( ! block ) {
+			console.error ( sW + ': block not found' ); 
+			return; }
+
+		dynamics2.disableContactResponse ( 'link-6' );
+		dynamics2.disableContactResponse ( 'finger' );
+		dynamics2.disableContactResponse ( blkName );
 		
+		let L6w = Dexter.HiRes.link6.matrixWorld;	//	link6 wrt world
+		let Bw  = block.matrixWorld;				//	block wrt world
+		let nL6w = new THREE.Matrix4();
+			nL6w.getInverse ( L6w );
+		let B6 = nL6w.multiply ( Bw );		//	block wrt link6
+	
+		block.parent.remove ( block );
+
+		let p = new THREE.Vector3();
+		let q = new THREE.Quaternion();
+		let s = new THREE.Vector3();
+		B6.decompose ( p, q, s );
+		block.position.set ( p.x, p.y, p.z );
+		block.setRotationFromQuaternion ( q );
+		block.scale.set ( 10, 10, 10 );
+		
+		Dexter.HiRes.link6.add ( block );
+
+		this.grasping = blkName;
+	}	//	graspBlock()
+
+	releaseBlock ( blkName ) {
+		const sW = 'App releaseBlock()';
+		let block = this.blocks[blkName];
+		if ( ! block ) {
+			console.error ( sW + ': block not found' ); 
+			return; }
+
+		let p = new THREE.Vector3();
+		let q = new THREE.Quaternion();
+		let s = new THREE.Vector3();
+		block.matrixWorld.decompose ( p, q, s );
+
+		block.parent.remove();
+		block.scale.set ( 1, 1, 1 );
+	
+		dynamics2.positionBlock ( blkName, p, q );
+
+		dynamics2.enableContactResponse ( 'link-6' );
+		dynamics2.enableContactResponse ( 'finger' );
+		dynamics2.enableContactResponse ( blkName );
+
+		this.scene.add ( block );
+	
+		this.grasping = null;
+	}	//	releaseBlock()
+	
+	scriptStatement ( next ) {
+		const sW = 'App scriptStatement()';
 		let j1 = this.jt['J1'].ctrl;
 		let j2 = this.jt['J2'].ctrl;
 		let j3 = this.jt['J3'].ctrl;
 		let j4 = this.jt['J4'].ctrl;
 		let j5 = this.jt['J5'].ctrl;
 		let j6 = this.jt['J6'].ctrl;
+		let f  = this.ee['Finger'].ctrl;
 
-		let script = [
-			{ j1:  40, 	j2:  74,	j3:  76,	j4:  48,  j5: -80,	v0: 0.2 },
-			{ j1:  32,  											v0: 0.20 },
-			{ j1:  30,  											v0: 0.08 },
-			{ j1:  28,  											v0: 0.08 },
-			{ j1:  26,  											v0: 0.08 },
-			{ j1:  24,  											v0: 0.08 },
-			{ j1:  22,  											v0: 0.08 },
-			{ j1:  20,  											v0: 0.08 },
-			{ j1:  18,  											v0: 0.08 },
-			{ j1:  16,  											v0: 0.08 },
-			{ j1:  14,  											v0: 0.08 },
-			{ 			j2:  56, 	j3:  123,						v0: 0.2 },
-			{ j1: -20, 							j4:  4,	  j5: 143,	v0: 0.08 },
-			{ 			j2:  80, 	j3:  90,						v0: 0.08 },
-			{ 			j2:  82,	j3:  84,	j4:  8,   j5: 130,	v0: 0.08 },
-			{ 						j3:  76,						v0: 0.08 },
-			{ 			j2:  56, 	j3:  123,						v0: 0.08 },
-			{ j1:   0,  											v0: 0.20 } ];
+		this.grab = null;
 
+		if ( this.iScript >= this.script.length ) {
+			this.v0CB = null;
+			return; }
+		let s = this.script[this.iScript];
+		console.log ( JSON.stringify ( s ) );
+		if ( s.camera ) {
+			this.moveCamera ( s.camera, next );
+			this.v0CB = null;
+			this.jvAbsMax = [];
+			this.iScript += 1;
+			return; }
+		if ( s.pause ) {
+			if ( next ) {
+				window.setTimeout ( next, s.pause ); }
+			this.v0CB = null;
+			this.jvAbsMax = [];
+			this.iScript += 1;
+			return; }
+		if ( s.grab ) {
+			this.grab = s.grab;
+			this.grab.cb = next;
+			this.iScript += 1;
+			return; }
+		if ( s.release ) {
+			if ( ! this.grasping ) {
+				console.error ( sW + ': not grasping' ); }
+			else {
+				this.releaseBlock ( this.grasping ); }
+			this.iScript += 1;
+			return; }
+		if ( s.f ) {
+			f.setValue ( s.f ); }
+		if ( s.j1 ) {
+			j1.setValue ( s.j1 ); }
+		if ( s.j2 ) {
+			j2.setValue ( s.j2 ); }
+		if ( s.j3 ) {
+			j3.setValue ( s.j3 ); }
+		if ( s.j4 ) {
+			j4.setValue ( s.j4 ); }
+		if ( s.j5 ) {
+			j5.setValue ( s.j5 ); }
+		if ( s.j6 ) {
+			j6.setValue ( s.j6 ); }
+		this.v0CB = { is: this.iScript, v0: s.v0, cb: next } 
+		this.jvAbsMax = [];
+		this.iScript += 1;
+	}	//	scriptStatement()
+
+	stepScript ( o ) {
+		const sW = 'App stepScript()';
+		console.log ( sW );
+		this.scriptStatement ( () => {
+			this.grab = null;
+			this.v0CB = null } );	
+	}	//	stepScript()
+
+	runScript ( o ) {
+		const sW = 'App runScript()';
+		console.log ( sW );
 		let self = this;
-		let is = 0;
-
 		function next() {
-			if ( is >= script.length ) {
-				self.v0CB = null;
-				return; }
-			let s = script[is];
-			if ( s.j1 ) {
-				j1.setValue ( s.j1 ); }
-			if ( s.j2 ) {
-				j2.setValue ( s.j2 ); }
-			if ( s.j3 ) {
-				j3.setValue ( s.j3 ); }
-			if ( s.j4 ) {
-				j4.setValue ( s.j4 ); }
-			if ( s.j5 ) {
-				j5.setValue ( s.j5 ); }
-			self.v0CB = { is: is, v0: s.v0, cb: next } 
-			self.jvAbsMax = [];
-			is += 1;
-		}
-
+			self.scriptStatement ( next ); }
 		next();
 	}	//	runScript()
 
@@ -852,7 +1166,7 @@ class App extends React.Component {
 		console.log ( sW );
 		if ( (o.iLink < 0) || (o.iLink >= this.HiResBBs.length) ) {
 			return; }
-		let bbs = this.HiResBBs[o.iLink];
+		let bbs = this.HiResBBs[o.iLink].bbs;
 		if ( this.HiResBB ) {
 			this.scene.remove ( this.HiResBB.helper );
 			this.HiResBB.helper = this.HiResBB = null; 
@@ -863,47 +1177,64 @@ class App extends React.Component {
 		if ( i >= bbs.length ) {
 			i = this.iHiResBB = 0; }
 		let bb = bbs[i];
-		if ( bb ) {
-			if ( bb.obj ) {
-				console.log ( sW + ': i ' + i 
-								 + '  obj  name: ' + bb.obj.name ); }
-			if ( bb.mesh ) {
-				console.log ( sW + ': i ' + i 
-								 + '  mesh name: ' + bb.mesh.name ); }
+		if ( ! bb ) {
+			return; }
+
+		if ( bb.obj ) {
+			console.log ( sW + ': i ' + i 
+							 + '  obj  name: ' + bb.obj.name ); }
+		if ( bb.mesh ) {
+			console.log ( sW + ': i ' + i 
+							 + '  mesh name: ' + bb.mesh.name ); }
 
 
-		//	bb.helper = new THREE.BoxHelper ( bb.obj, 0xFFFFFF );
-		//	bb.helper.update();
-		//	this.scene.add ( bb.helper );
+	//	bb.helper = new THREE.BoxHelper ( bb.obj, 0xFFFFFF );
+	//	bb.helper.update();
+	//	this.scene.add ( bb.helper );
 
-			let bbox = null;
-			if ( bb.obj ) {
-				bbox  = new THREE.Box3();
-				bbox.setFromObject ( bb.obj ); }
-			if ( bb.mesh ) {
-				bb.mesh.geometry.computeBoundingBox();
-				bbox = bb.mesh.geometry.boundingBox; }
-				
-			bb.helper = new THREE.Box3Helper ( bbox, 0xFFFFFF );
-			bb.helper.updateMatrixWorld ( true );
-			this.scene.add ( bb.helper );
+		let bbox = null;
+		if ( bb.obj ) {
+			bbox  = new THREE.Box3();
+			bbox.setFromObject ( bb.obj ); }
+		if ( bb.mesh ) {
+			bb.mesh.geometry.computeBoundingBox();
+			bbox = bb.mesh.geometry.boundingBox; }
 			
-			//	To set the helper's matrix, rotation. ?
-			this.renderer3D.render ( this.scene, this.camera ); 
+		bb.helper = new THREE.Box3Helper ( bbox, 0xFFFFFF );
+		bb.helper.updateMatrixWorld ( true );
+		this.scene.add ( bb.helper );
+		
+		//	To set the helper's matrix, rotation. ?
+		this.renderer3D.render ( this.scene, this.camera ); 
 
-			let lp = Dexter.HiRes.link2.getWorldPosition();
-			let bbSize = new THREE.Vector3();
-			bbox.getSize ( bbSize );
-			console.log ( sW + ': bbSize ' + bbSize.x
-							 + '  ' + bbSize.y
-							 + '  ' + bbSize.z );
-			console.log ( sW + ': lp ' + lp.x + '  ' + lp.y + '  ' + lp.z );
-			let p = bb.helper.position;
-			console.log ( sW + ':  p ' + p.x + '  ' + p.y + '  ' + p.z );
-			let q = bb.helper.quaternion;
-			console.log ( sW + ':  q ' + q.x + '  ' + q.y + '  ' + q.z );
-			this.HiResBB = bb; }
+		let link = this.HiResBBs[o.iLink].link;
+		let lp   = link.getWorldPosition();
+		let bbSize = new THREE.Vector3();
+		bbox.getSize ( bbSize );
+		console.log ( sW + ': bbSize ' + bbSize.x
+						 + '  ' + bbSize.y
+						 + '  ' + bbSize.z );
+		console.log ( sW + ': link pos wrt world ' + lp.x 
+											+ '  ' + lp.y 
+											+ '  ' + lp.z );
+		let p = bb.helper.position;
+		console.log ( sW + ': bb   pos wrt world ' + p.x 
+											+ '  ' + p.y 
+											+ '  ' + p.z );
+		let q = bb.helper.quaternion;
+		console.log ( sW + ':  q ' + q.x + '  ' + q.y + '  ' + q.z );
 
+		//	bb wrt to link
+		let Lw = link.matrixWorld;			//	link wrt world
+		let BBw = bb.helper.matrixWorld;	//	box wrt world
+		let nLw = new THREE.Matrix4();
+			nLw.getInverse ( Lw );
+		let BBl = nLw.multiply ( BBw );		//	box wrt link
+		p = BBl.getPosition();
+		console.log ( sW + ': bb   pos wrt link  ' + p.x 
+											+ '  ' + p.y 
+											+ '  ' + p.z );
+		this.HiResBB = bb; 
 	}	//	cycleBoundingBox()
 
 
@@ -920,13 +1251,8 @@ class App extends React.Component {
 		const needResize =    this.canvas.width  !== width 
 						   || this.canvas.height !== height;
 
-		this.h_count += 1;
-		if ( this.h_count % 100 === 0 ) {
-			console.log ( 'height: ' + height ); }
-		
 		if ( needResize ) {
-			this.renderer3D.setSize ( width, height, false );
-		}
+			this.renderer3D.setSize ( width, height, false ); }
 		return needResize;
 	}
 
@@ -987,7 +1313,9 @@ class App extends React.Component {
 
 	gatherBoundingBoxes ( iLink, link ) {
 		const sW = 'App gatherBoundingBoxes()';
-		let a = this.HiResBBs[iLink] = [];
+		this.HiResBBs[iLink] = { link: 	link,
+								 bbs:	[] };
+		let a = this.HiResBBs[iLink].bbs;
 		function cBB ( obj, mesh ) {
 			a.push ( { obj:		obj,
 					   mesh:	mesh,
@@ -1012,7 +1340,7 @@ class App extends React.Component {
 
 	defineBoundingBox ( iLink, link, bbObjName ) {
 		const sW = 'App defineBoundingBox()';
-		let a = this.HiResBBs[iLink];
+		let a = this.HiResBBs[iLink].bbs;
 		if ( ! Array.isArray ( a ) ) {
 			return; }
 		let o = a.find ( o => o.obj && o.obj.name === bbObjName );
@@ -1022,13 +1350,13 @@ class App extends React.Component {
 		let bbox  = new THREE.Box3().setFromObject ( linkObjForBB );
 		let helper = new THREE.Box3Helper ( bbox, 0 );
 			helper.updateMatrixWorld ( true );
-		let Lw = link.matrixWorld;
-		let BBw = helper.matrixWorld;
+		let Lw = link.matrixWorld;			//	link wrt world
+		let BBw = helper.matrixWorld;		//	box wrt world
 
 		let nLw = new THREE.Matrix4();
 			nLw.getInverse ( Lw );
 
-		let BBl = nLw.multiply ( BBw );
+		let BBl = nLw.multiply ( BBw );		//	box wrt link
 
 		//	Create a wireframe to represent the bounding box.
 		let bbSize = new THREE.Vector3();
@@ -1056,7 +1384,7 @@ class App extends React.Component {
 
 		//	Add it as a child to the link.
 		wf.matrix.identity();
-	//	wf.scale.set ( 10, 10, 10 );		//	Note scale.
+		wf.scale.set ( 10, 10, 10 );		//	Note scale.
 		link.add ( wf );
 
 		//	Set it's position.
@@ -1068,6 +1396,51 @@ class App extends React.Component {
 		wf.setRotationFromQuaternion ( q );
 	}	//	createBoundingBox()
 
+	createFingerPad ( finger, def ) {
+		const sW = 'App createFingerPad()';
+		console.log ( sW + ': x ' + def.x
+						 + '  y ' + def.y
+						 + '  z ' + def.z
+						 + '  w ' + def.w
+						 + '  l ' + def.l
+						 + '  h ' + def.h );
+		let color = new THREE.Color ( 1, 1, 1 );
+		let wf = this.createCOP ( null, def.w, def.l, def.h, 0, color, 
+								  true );	//	with coord frame
+
+		//	Add it as a child to the finger.
+		wf.matrix.identity();
+		wf.scale.set ( 10, 10, 10 );		//	Note scale.
+		finger.add ( wf );
+
+		//	Set it's position.
+		wf.position.set ( def.x, def.y, def.z );
+
+		this.fpm.wf = wf;
+	}	//	createFingerPad()
+	
+	attachFingerPad ( finger, padName, def ) {
+		let obj = new THREE.Object3D();
+		obj.name = padName;
+		const color	= new THREE.Color ( 0.2, 0.2, 0.9 );	//	blue?
+		const geo	= new THREE.BoxGeometry ( def.w, def.h, def.l );
+		const mat	= new THREE.MeshPhongMaterial ( { color: color } );
+		mat.opacity		= 0.6;
+		mat.transparent	= true;
+		let pad = new THREE.Mesh ( geo, mat );
+		pad.name = padName;
+		pad.scale.set ( 10, 10, 10 );		//	Note scale.
+
+	//	finger.add ( pad );
+		obj.add ( pad );			//	Bounding box works better on Object3D.
+		finger.add ( obj );
+
+	//	pad.position.set ( def.x, def.y, def.z );
+	//	return pad;
+		obj.position.set ( def.x, def.y, def.z );
+		return obj;
+	}	//	attachFingerPad()
+	
 	setTransparent ( obj, opacity ) {
 		if ( ! obj ) {
 			return; }
@@ -1081,6 +1454,17 @@ class App extends React.Component {
 		let self = this;
 		obj.children.forEach ( c => self.setTransparent ( c, opacity ) );
 	}	//	setTransparent()
+
+	castShadow ( obj ) {
+		if ( ! obj ) {
+			return; }
+		if ( obj.constructor.name === 'Mesh' ) {
+			obj.castShadow = true; }
+		if ( ! Array.isArray ( obj.children ) ) {
+			return; }
+		let self = this;
+		obj.children.forEach ( c => self.castShadow ( c ) );
+	}	//	castShadow()
 
 	getLinks ( grp ) {
 		const sW = 'App getLinks()';
@@ -1113,13 +1497,15 @@ class App extends React.Component {
 			return; }
 
 		//	Dexter configuration, bounding box definition.
-		let config = {}, bbDef = null;
+		let config = {}, bbDef = null, def = null;
 		
 		//	Bounding boxes.
 		//	All bounding boxes from the link and its children.
 		if ( this.bTransparentDexter ) {
 			this.setTransparent ( Dexter.HiRes.base, 0.35 ); }
 		
+		this.castShadow ( Dexter.HiRes.base );
+	
 		this.createCoordFrame ( Dexter.HiRes.base, 0.50, 0.8, false );
 		this.gatherBoundingBoxes ( 0, Dexter.HiRes.base );
 		//	Default bounding box for the link.
@@ -1177,25 +1563,86 @@ class App extends React.Component {
 		config.link5 = { obj:	Dexter.HiRes.link5,
 						 bbDef:	bbDef };
 
-		this.createCoordFrame ( Dexter.HiRes.link6, 0.50, 0.8, false );
+		//	Link 6
+		//
+		if ( this.bGotStationaryFingerPad ) {
+			//	Attach finger pads.
+			//	These numbers were determined previously with the Finger Pad 
+			//	controls and the createFingerPad() calls below.
+			//	The stationary finger -
+			def = { x:	 0.01,
+					y:	 0.00,
+					z:	-0.65,
+					w:	 0.005,
+					h:	 0.026,
+					l:	 0.060 };
+			this.attachFingerPad ( Dexter.HiRes.link6, 
+								   'Stationary_Finger_Pad', def ); }
 		this.gatherBoundingBoxes ( 6, Dexter.HiRes.link6 );
-	//	this.createBoundingBox ( 6, Dexter.HiRes.link6, 
-	//							 'DexterHDI_Link6_KinematicAssembly_v3' );
-		bbDef = this.defineBoundingBox ( 6, Dexter.HiRes.link6, 
-								 'CenterGripper_v11' );
+		this.createCoordFrame ( Dexter.HiRes.link6, 0.50, 0.8, false );
+		if ( this.bCreateStationaryFingerPad ) {
+			//	Finger pad for stationary finger.
+			def = { x: this.fpm.x.value,
+					y: this.fpm.y.value,
+					z: this.fpm.z.value,
+					w: this.fpm.w.value, 
+					h: this.fpm.h.value,
+					l: this.fpm.l.value };
+			this.createFingerPad ( Dexter.HiRes.link6, def ); }
+		if ( this.bGotStationaryFingerPad ) {
+			bbDef = this.defineBoundingBox ( 6, Dexter.HiRes.link6, 
+								 	 'Stationary_Finger_Pad' ); }
+		else {
+			bbDef = this.defineBoundingBox ( 6, Dexter.HiRes.link6, 
+									 'CenterGripper_v11' ); }
 		config.link6 = { obj:	Dexter.HiRes.link6,
-						 bbDef:	bbDef };
+						 bbDef:	bbDef,
+					finger: { x: (this.ee.Finger.value + this.mfpf) / 10 } };
 
-		//	Fingers?
-		//	For now.
-		this.gatherBoundingBoxes ( 7, Dexter.HiRes.link7 );
-	//	this.createBoundingBox ( 7, Dexter.HiRes.link7, 
-	//							 'DexterHDI_Link7_KinematicAssembly_v21' );
+		//	Moving Finger
+		//
+		if ( this.bGotMovingFingerPad ) {
+			def = { x:	-0.17, 
+					y:	-0.03,
+					z:	 0.36,
+					w:	 0.005,
+					h:	 0.026,
+					l:	 0.060 };
+			this.attachFingerPad ( Dexter.HiRes.finger, 
+								   'Moving_Finger_Pad', def ); }
+		//	Try this. Note that Dexter.HiRes.finger is set above.
+		this.gatherBoundingBoxes ( 7, Dexter.HiRes.finger );
+		this.createCoordFrame ( Dexter.HiRes.finger, 0.40, 0.8, false );
+		if ( this.bCreateMovingFingerPad ) {
+			def = { x: this.fpm.x.value,
+					y: this.fpm.y.value,
+					z: this.fpm.z.value,
+					w: this.fpm.w.value, 
+					h: this.fpm.h.value,
+					l: this.fpm.l.value };
+			this.createFingerPad ( Dexter.HiRes.finger, def ); }
+		if ( this.bGotMovingFingerPad ) {
+			bbDef = this.defineBoundingBox ( 7, Dexter.HiRes.finger, 
+							'Moving_Finger_Pad' ); }
+		else {
+			bbDef = this.defineBoundingBox ( 7, Dexter.HiRes.finger, 
+							'TI1-420-002_ParallelGripperDynamicFinger_v2' ); }
+		Dexter.HiRes.finger.position.x = this.ee.Finger.value;
+		//	The finger is not a direct child of link6. So ...
+		let L6w = Dexter.HiRes.link6.matrixWorld;	//	link6 wrt world
+		let Fw = Dexter.HiRes.finger.matrixWorld;	//	finger wrt world
+		let nL6w = new THREE.Matrix4();
+			nL6w.getInverse ( L6w );
+		let Fl6 = nL6w.multiply ( Fw );		//	finger wrt link6
+		config.finger = { obj:		Dexter.HiRes.finger,
+						  posWrtParent:	Fl6.getPosition(),
+						  bbDef:	bbDef };
 
-	//	this.gatherBoundingBoxes ( Dexter.HiRes.link7,
-	//							'' );
 
+	
 		dynamics2.createMultiBody ( config ); 
+
+		dynamics2.createJointMotors();
 
 	}	//	getLinks()
 
@@ -1207,7 +1654,7 @@ class App extends React.Component {
 								 / this.canvas.clientHeight;
 			this.camera.updateProjectionMatrix(); }
 
-		let deltaTime = this.clock.getDelta() / 1000;
+		let deltaTime = this.clock.getDelta();
 
 		let qd = [];		//	Joint target values.
 		qd.push ( this.jt['J1'].value );
@@ -1216,6 +1663,14 @@ class App extends React.Component {
 		qd.push ( this.jt['J4'].value );
 		qd.push ( this.jt['J5'].value );
 		qd.push ( this.jt['J6'].value );
+
+		//	Need to specify the moving finger position. Just push it on
+		//	qd[].
+	//	qd.push ( (this.ee['Finger'].value + this.mfpf) / 10 );
+		//	Moving finger as a fixed link.
+	//	qd.push (  this.ee['Finger'].value                   );
+		qd.push ( (this.ee['Finger'].value + (2 * this.mfpf)) / 10 );
+
 		let bInverseDynamics = true;
 	//	let bInverseDynamics = false;
 		let jc = [];		//	Joint current values.
@@ -1224,19 +1679,23 @@ class App extends React.Component {
 		let ground = {};
 		let blocks = [];
 
-		if ( this.bLoResDynamicsEnabled ) {
+		if ( this.bLoResDynamicsEnabled && this.bLoResStepSim ) {
 			dynamics.stepSimulation ( deltaTime, qd, bInverseDynamics, jc,
 									  this.kp, this.kd, jv, jt, ground, 
 																blocks ); }
-		if ( this.bHiResDynamicsEnabled ) { 
-			dynamics2.stepSimulation ( deltaTime, qd, bInverseDynamics, jc,
-									   this.kp, this.kd, jv, jt, ground, 
-																 blocks ); }
+		if ( this.bHiResDynamicsEnabled && this.bHiResStepSim ) { 
+		//	dynamics2.stepSimulation ( deltaTime, qd, bInverseDynamics, jc,
+		//							   this.kp, this.kd, jv, jt, ground, 
+		//														 blocks ); }
+			dynamics2.stepSimulation2 ( deltaTime, qd, jc,
+									    this.kp / 1000, 
+										this.kd / 1000, 
+										jv, jt, ground, blocks ); }
 
 		if ( jc.length === 0 ) {
-			jc.splice ( 0, 0, 0, 0, 0, 0, 0, 0 );
-			jv.splice ( 0, 0, 0, 0, 0, 0, 0, 0 );
-			jt.splice ( 0, 0, 0, 0, 0, 0, 0, 0 ); } 
+			jc.splice ( 0, 0, 0, 0, 0, 0, 0, 0, 0 );
+			jv.splice ( 0, 0, 0, 0, 0, 0, 0, 0, 0 );
+			jt.splice ( 0, 0, 0, 0, 0, 0, 0, 0, 0 ); } 
 
 		let jvAbsMax = 0;
 
@@ -1297,7 +1756,11 @@ class App extends React.Component {
 			let a = Math.abs ( jv[5] );
 			if ( a > jvAbsMax ) {
 				jvAbsMax = a; }
-			this.updateGauges ( this.fncJoint6Gauges, jc[5], jv[5], jt[5] ); }
+			this.updateGauges ( this.fncJoint6Gauges, jc[5], jv[5], jt[5] ); 
+
+			axis = this.ee.Finger.axis;
+			if ( Dexter.HiRes.finger && this.bHiResMoveEnabled ) {
+				Dexter.HiRes.finger.position[axis] = this.ee.Finger.value; } }
 
 		let self = this;
 		if ( self.ground && ground.ammoQ && ground.ammoP ) {
@@ -1312,6 +1775,8 @@ class App extends React.Component {
 			self.ground.setRotationFromQuaternion ( q ); }
 
 		blocks.forEach ( b => {
+			if ( b.name === self.grasping ) {
+				return; }
 			let q = new THREE.Quaternion();
 			let a = b.ammoQ.getAxis();
 			let v = new THREE.Vector3 ( a.x(), a.y(), a.z() );
@@ -1327,8 +1792,9 @@ class App extends React.Component {
 	//		dyn = dynamics; }
 		if ( this.bHiResDynamicsEnabled ) {
 			dyn = dynamics2; }
-		if ( dyn ) {
-			dyn.getCollisionObjectPositions().forEach ( cop => {
+		while ( dyn ) {
+			let olos = [];
+			dyn.getCollisionObjectPositions ( olos ).forEach ( cop => {
 				let obj = self.cops[cop.name];
 				if ( ! obj ) {
 					obj = self.createCOP ( self.scene, cop.w, cop.l, cop.h,
@@ -1341,21 +1807,73 @@ class App extends React.Component {
 				q.setFromAxisAngle ( v, cop.qa );
 				obj.position.set ( cop.px, cop.py, cop.pz );
 				obj.setRotationFromQuaternion ( q ); 
-				if ( cop.name.startsWith ( 'block-' ) ) {
-					let block = self.blocks[cop.name];
-					if ( block ) {
-						block.position.set ( cop.px, cop.py, cop.pz );
-						block.setRotationFromQuaternion ( q ); } }
-			} ); }
-
+			//	if ( cop.name.startsWith ( 'block-' ) ) {
+			//		let block = self.blocks[cop.name];
+			//		if ( block && (self.grasping !== cop.name) ) {
+			//			block.position.set ( cop.px, cop.py, cop.pz );
+			//			block.setRotationFromQuaternion ( q ); } }
+			} ); 
+			if ( olos.length !== this.lastOlosLength ) {
+				this.lastOlosLength = olos.length;
+				olos.forEach ( o => {
+					if ( ! (   o.a.name.includes ( 'link-6' )
+							|| o.b.name.includes ( 'link-6' )
+							|| o.a.name.includes ( 'finger' )
+							|| o.b.name.includes ( 'finger' )) ) {
+						return; }
+					console.log ( sW + ': olo ' + o.a.name  
+										 + '  ' + o.b.name
+										 + '  ' + o.numContacts );  } ); } 
+		
+			if ( this.grab ) {
+				//	{ grab: { blk: 'block-x', numContacts: 1, cb; callback } }
+				let g  = this.grab;
+				if ( ! g.nAttempts ) {
+					console.log ( 'out of grab attempts' );
+					g.cb();
+					break; }
+				g.nAttempts -= 1;
+				let l6 = null;
+				let f  = null;
+				for ( let i = 0; i < olos.length; i++ ) {
+					let o = olos[i];
+					if (   (! l6)
+						&& (o.a.name === 'link-6')
+						&& (o.b.name === g.blk)
+						&& (o.numContacts >= g.numContacts ) ) {
+						l6 = o; }
+					if (   (! l6)
+						&& (o.a.name === g.blk)
+						&& (o.b.name === 'link-6')
+						&& (o.numContacts >= g.numContacts ) ) {
+						l6 = o; }
+					if (   (! f)
+						&& (o.a.name === 'finger')
+						&& (o.b.name === g.blk)
+						&& (o.numContacts >= g.numContacts ) ) {
+						f = o; }
+					if (   (! f)
+						&& (o.a.name === g.blk)
+						&& (o.b.name === 'finger')
+						&& (o.numContacts >= g.numContacts ) ) {
+						f = o; } 
+					if ( l6 && f ) {
+						this.graspBlock ( g.blk ); 
+						g.cb();
+						break; } } }
+			break;
+		}	//	while ( dyn )
+		
 		if ( jc.length > 0 ) {
 			this.renderer3D.render ( this.scene, this.camera ); }
 		
 		//	To slow things down, lesson the log, for debugging set this 
 		//	timeout delay to non-0.
-		window.setTimeout ( () => {
-			window.requestAnimationFrame ( this.render3D );
-		}, 0 );
+		//	This is only for debugging.
+	//	window.setTimeout ( () => {
+	//		window.requestAnimationFrame ( this.render3D );
+	//	}, 0 );
+		window.requestAnimationFrame ( this.render3D );
 
 		if (  this.jvAbsMax.length < 10 ) {
 			this.jvAbsMax.push ( jvAbsMax ); }
@@ -1374,7 +1892,7 @@ class App extends React.Component {
 				console.log ( sW + ': is ' + this.v0CB.is
 								 + '  max ' + max 
 								 + '  v0 ' + this.v0CB.v0 );
-				if ( max <= this.v0CB.v0 ) {
+				if ( this.v0CB.cb && (max <= this.v0CB.v0) ) {
 					this.v0CB.cb(); } } }
 	}	//	render3D()
 
@@ -1408,6 +1926,10 @@ class App extends React.Component {
 					default:
 						console.error ( sW + ': unrecognized o.what' );
 				}
+				break;
+
+			case 'step-script':
+				this.stepScript ( o );
 				break;
 
 			case 'run-script':
@@ -1515,14 +2037,22 @@ class App extends React.Component {
 				if ( bCreateDexter ) {
 					dyn.createMultiBody(); }
 				//	Ground and blocks are involved in collisions.
-			//	self.ground = self.createGround ( self.scene );
-			//	self.createBlocks ( self.scene );
+				self.ground = self.createGround ( self.scene );
+				self.createBlocks ( self.scene );
 			} ); }
 
 		this.gui = new GUI();
 		this.gui.domElement.id = 'gui';
 
 		this.create3dScene();
+
+		//	World coordinate frame.
+		let cf = this.createCoordFrame ( this.scene, 
+										 0.30, 		//	scale
+										 0.3, 		//	opacity
+										 false,		//	not a wireframe
+										 true );	//	do depth test
+		cf.visible = true;		//	world coord frame always visible
 	
 		this.createFloor();
 
@@ -1530,9 +2060,13 @@ class App extends React.Component {
 
 		this.createDirectionalLight();		//	Shadows
 
+		this.createFingerPadControls();
+		
 		this.createKpKdControls();			//	Joint spring and damper
 
 		this.createJointControls();
+		
+		this.createEndEffectorControls();
 		
 		if ( this.bCreateLoResDexter ) {
 			this.createLoResDexter(); }
