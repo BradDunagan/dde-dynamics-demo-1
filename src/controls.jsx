@@ -31,6 +31,7 @@ class Controls extends React.Component {
 							this.importDexterFromGltf.bind ( this );
 		this.clickStepScript	= this.clickStepScript.bind ( this );
 		this.clickRunScript		= this.clickRunScript.bind ( this );
+		this.clickAnotherBlock	= this.clickAnotherBlock.bind ( this );
 		this.clickImportDexter 	= this.clickImportDexter.bind ( this );
 		this.clickHideShowLowResDexter	= 
 							this.clickHideShowLowResDexter.bind ( this );  
@@ -75,6 +76,12 @@ class Controls extends React.Component {
 		console.log ( sW );
 		this.props.fncApp ( { do:	'run-script' } );
 	}	//	clickRunScript()
+
+	clickAnotherBlock ( evt ) {
+		const sW = 'Controls clickAnotherBlock()';
+		console.log ( sW );
+		this.props.fncApp ( { do:	'another-block' } );
+	}	//	clickAnotherBlock()
 
 	clickImportDexter ( evt ) {
 		const sW = 'Controls clickImportDexter()';
@@ -204,9 +211,8 @@ class Controls extends React.Component {
 				<div className = "controls-button-container" >
 					<button className = "controls-general-button controls-button"
 							disabled  = { false }
-							onClick   = { this.clickHideShowLowResDexter } >
-				{ /*	{ this.state.lowResVisible ? 'Hide Low Res' 
-												   : 'Show Low Res' } */ }
+							onClick   = { this.clickAnotherBlock } >
+						Another Block
 					</button>
 				</div>
 				<div className = "controls-button-container" >

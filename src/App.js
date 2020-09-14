@@ -120,6 +120,8 @@ class App extends React.Component {
 		this.gui	= null;
 
 		this.ground = null;
+
+		this.blockColor = '833';
 		this.blocks	= {};
 
 		this.light	= null;
@@ -144,6 +146,7 @@ class App extends React.Component {
 								= this.createFingerPadControls.bind ( this );
 		this.createLoResDexter	= this.createLoResDexter.bind ( this );
 		this.createGround		= this.createGround.bind ( this );
+		this.createAndDropBlock	= this.createAndDropBlock.bind ( this );
 		this.createBlocks		= this.createBlocks.bind ( this );
 		this.createBlock		= this.createBlock.bind ( this );
 		this.createWireframe	= this.createWireframe.bind ( this );
@@ -255,6 +258,8 @@ class App extends React.Component {
 								y:	 0.5, 
 								z:	-0.5 };
 		
+		this.rogueBlockName	= null;
+
 		this.lastOlosLength = 0;
 		
 		//	Script statements.
@@ -282,7 +287,7 @@ class App extends React.Component {
 		//	Disable collision contact on pads, or/and block.
 		//	Attach block to link 6.
 		//	...
-			{ grab: { blk: 'block-x', numContacts: 1, nAttempts: 10 } },
+			{ grab: { blkName: '', numContacts: 1, nAttempts: 10 } },
 
 			//	Move up.
 			{ j1:  38, j2: -77, j3: -33, j4:  36,  j5:  -4,	j6:  69, v0: 0.2 },
@@ -306,6 +311,9 @@ class App extends React.Component {
 		];
 		this.iScript	= 0;		//	Script statement index
 
+		//	From where block(s) is/are dropped that Dexter picks up.
+		this.abovePickupPoint 	= { x: 0.5, y: 0.1, z: -0.4 };
+		
 		this.grasping	= null;		//	Set to name of block when is block
 									//	is grasped.
 	}	//	constructor()
@@ -783,27 +791,29 @@ class App extends React.Component {
 		return ground;
 	}	//	createGround()
 
+	createAndDropBlock ( parent, dropFrom ) {
+		let i = Object.keys ( this.blocks ).length;
+		//	Name 'block-a', 'block-b', 'block-c', ...
+		let name = 'block-' + String.fromCharCode ( 'a'.charCodeAt ( 0 ) + i );
+		//	Cycle the colors red, green, blue, red, green, ...
+		this.blockColor = this.blockColor.slice ( 1 ) + this.blockColor.slice ( 0, 1 );
+	//	let block = this.createBlock ( name, parent, 0.04, 0.04, 0.04, 
+		let block = this.createBlock ( name, parent, 0.03, 0.03, 0.03, 
+									   '#' + this.blockColor, 
+									   dropFrom );
+		this.blocks[name] = block;
+		return name;
+	}	//	createAndDropBlock()
+
 	createBlocks ( parent ) {
 		let self = this;
 		let numBlocks = 23, iBlock = 0;
-		let color = '833';
-		function ernk ( dropFrom ) {
-			//	Name 'block-a', 'block-b', 'block-c', ...
-			let name = 'block-' 
-				+ String.fromCharCode ( 'a'.charCodeAt ( 0 ) + iBlock );
-			//	Cycle the colors red, green, blue, red, green, ...
-			color = color.slice ( 1 ) + color.slice ( 0, 1 );
-		//	let block = self.createBlock ( name, parent, 0.04, 0.04, 0.04, 
-			let block = self.createBlock ( name, parent, 0.03, 0.03, 0.03, 
-										   '#' + color, 
-										   dropFrom );
-			self.blocks[name] = block;
-		}
 		function next() {
 			if ( iBlock >= numBlocks ) {
-				ernk ( { x: 0.5, y: 0.1, z: -0.4 } );	//	one more
+				//	one more
+				self.rogueBlockName = self.createAndDropBlock ( parent, self.abovePickupPoint  );
 				return; }
-			ernk ( self.dropBlocksFrom );
+			self.createAndDropBlock ( parent, self.dropBlocksFrom );
 			iBlock += 1;
 			window.setTimeout ( next, 100 ); }
 		next();
@@ -1090,6 +1100,7 @@ class App extends React.Component {
 		this.grab = null;
 
 		if ( this.iScript >= this.script.length ) {
+			this.iScript = 0;		//	Start over.
 			this.v0CB = null;
 			return; }
 		let s = this.script[this.iScript];
@@ -1109,6 +1120,7 @@ class App extends React.Component {
 			return; }
 		if ( s.grab ) {
 			this.grab = s.grab;
+			this.grab.blkName = this.rogueBlockName;
 			this.grab.cb = next;
 			this.iScript += 1;
 			return; }
@@ -1800,26 +1812,26 @@ class App extends React.Component {
 					let o = olos[i];
 					if (   (! l6)
 						&& (o.a.name === 'link-6')
-						&& (o.b.name === g.blk)
+						&& (o.b.name === g.blkName)
 						&& (o.numContacts >= g.numContacts ) ) {
 						l6 = o; }
 					if (   (! l6)
-						&& (o.a.name === g.blk)
+						&& (o.a.name === g.blkName)
 						&& (o.b.name === 'link-6')
 						&& (o.numContacts >= g.numContacts ) ) {
 						l6 = o; }
 					if (   (! f)
 						&& (o.a.name === 'finger')
-						&& (o.b.name === g.blk)
+						&& (o.b.name === g.blkName)
 						&& (o.numContacts >= g.numContacts ) ) {
 						f = o; }
 					if (   (! f)
-						&& (o.a.name === g.blk)
+						&& (o.a.name === g.blkName)
 						&& (o.b.name === 'finger')
 						&& (o.numContacts >= g.numContacts ) ) {
 						f = o; } 
 					if ( l6 && f ) {
-						this.graspBlock ( g.blk ); 
+						this.graspBlock ( g.blkName ); 
 						g.cb();
 						break; } } }
 			break;
@@ -1895,6 +1907,10 @@ class App extends React.Component {
 
 			case 'run-script':
 				this.runScript ( o );
+				break;
+
+			case 'another-block':
+				this.rogueBlockName = this.createAndDropBlock ( this.scene, this.abovePickupPoint  );	
 				break;
 
 			case 'cycle-bounding-box':
