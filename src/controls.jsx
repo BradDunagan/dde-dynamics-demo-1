@@ -14,6 +14,10 @@ import { GLTFLoader }		from './GLTFLoader';
 /*
 import { FBXLoader }		from './FBXLoader';
 */
+/*
+import STLLoader			from 'three-stl-loader';
+*/
+import { STLLoader } 		from 'three/examples/jsm/loaders/STLLoader.js';
 
 import './App.css';
 import './controls.css';
@@ -29,6 +33,7 @@ class Controls extends React.Component {
 
 		this.importDexterFromGltf = 
 							this.importDexterFromGltf.bind ( this );
+		this.importSTL			= this.importSTL.bind ( this );
 		this.clickStepScript	= this.clickStepScript.bind ( this );
 		this.clickRunScript		= this.clickRunScript.bind ( this );
 		this.clickAnotherBlock	= this.clickAnotherBlock.bind ( this );
@@ -65,6 +70,19 @@ class Controls extends React.Component {
 		} );
 	}	//	importDexterFromGltf()
 
+	importSTL() {
+		const sW = 'Controls importSTL()';
+		const stlLoader = new STLLoader();
+		const url = 'AprilTagTile_99.stl';
+		stlLoader.load ( url, ( geo ) => {
+			var material = new THREE.MeshNormalMaterial()
+			var mesh = new THREE.Mesh(geo, material)
+			mesh.scale.set ( 0.001, 0.001, 0.001 );
+			this.props.fncApp ( { do:	'add-to-scene-stl',
+								  mesh:	mesh } );
+		} );
+	}	//	importSTL()
+
 	clickStepScript ( evt ) {
 		const sW = 'Controls clickStepScript()';
 		console.log ( sW );
@@ -97,6 +115,7 @@ class Controls extends React.Component {
 		} );
 		*/
 		this.importDexterFromGltf();
+	//	this.importSTL();
 	}	//	clickImportDexter()
 
 	clickHideShowLowResDexter ( evt ) {

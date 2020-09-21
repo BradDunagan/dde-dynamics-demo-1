@@ -48,6 +48,20 @@ class KPKDGUIHelper {
 	}
 }	//	KPKDGUIHelper()
 
+class VAGUIHelper {
+	constructor ( app, v ) {
+		this.app = app;
+		this.v   = v;
+	}
+	get va() {
+		let v = this.app.jointVA[this.v].value;
+		return v;
+	}
+	set va ( v ) {
+		this.app.jointVA[this.v].value = v;
+	}
+}	//	VAGUIHelper()
+
 class JointGUIHelper {
 	constructor ( app, joint ) {
 		this.app   = app;
@@ -138,6 +152,9 @@ class App extends React.Component {
 		this.createDirectionalLight	
 								= this.createDirectionalLight.bind ( this );
 		this.createKpKdControls	= this.createKpKdControls.bind ( this );
+	
+		this.createJointVelocityAccelerationControls
+				= this.createJointVelocityAccelerationControls.bind ( this );
 		this.createJointControls
 								= this.createJointControls.bind ( this );
 		this.createEndEffectorControls
@@ -166,17 +183,12 @@ class App extends React.Component {
 		this.resizeRendererToDisplaySize
 							= this.resizeRendererToDisplaySize.bind ( this );
 
-	//	this.kp =  100;			//	Spring
-	//	this.kp = 6500;			//	Spring
-	//	this.kp =  400;			//	Spring
-	//	this.kp =  880;			//	Spring
-		this.kp =   70;			//	Spring
-
-	//	this.kd =   20;			//	Damping
-	//	this.kd =  150;			//	Damping
-	//	this.kd =   80;			//	Damping
-	//	this.kd =   60;			//	Damping
-		this.kd = 1000;			//	Damping
+		//	These are facters. They are multiplied by each joint's v and a.
+		this.jointVA = {	
+			velocity:		{ value:	1.0,
+							  ctrl:		null },
+			acceleration:	{ value:	1.0,
+							  ctrl:		null } };
 
 		this.jt	= {};			//	Joint Target values.
 		this.ee = {};			//	End Effector values.
@@ -193,6 +205,11 @@ class App extends React.Component {
 		this.castShadow			= this.castShadow.bind ( this );
 		this.getLinks			= this.getLinks.bind ( this );
 
+		this.calculateRunningAverageDeltaTime 
+						= this.calculateRunningAverageDeltaTime.bind ( this );
+
+		this.jointNextPosition	= this.jointNextPosition.bind ( this );
+		this.jointNextPosition2	= this.jointNextPosition2.bind ( this );
 		this.render3D			= this.render3D.bind ( this );
 
 		this.doAll				= this.doAll.bind ( this );
@@ -268,13 +285,11 @@ class App extends React.Component {
 			{ camera: { atX: 0.49, atY: 0.03, atZ: -0.34,
 						fmX: 1.12, fmY: 0.62, fmZ:  0.78 } },
 			{ j1:  46, j2: -83, j3: -28, j4:  20,  j5:  -4,	j6:  72, v0: 0.2 },
-			{ j1:  44, j2: -76, j3: -38, j4:  32,  j5:  -4,	j6:  72, v0: 0.2 },
-			{ j1:  40, j2: -80, j3: -34, j4:  32,  j5:  -4,	j6:  72, v0: 0.2 },
-			{ j1:  40, j2: -80, j3: -33, j4:  32,  j5:  -4,	j6:  69, v0: 0.2 },
-			{ j1:  40, j2: -77, j3: -39, j4:  36,  j5:  -4,	j6:  69, v0: 0.2 },
+
+			{ j1:  41, j2: -80, j3: -36, j4:  29,  j5:  -4,	j6:  69, v0: 0.2 },
 			{ f: 0.50, v0: 0.2 },
-			{ j1:  40, j2: -80, j3: -33, j4:  36,  j5:  -4,	j6:  69, v0: 0.2 },
-			{ j1:  38, j2: -80, j3: -33, j4:  36,  j5:  -4,	j6:  69, v0: 0.2 },
+			{ j1:  37, j2: -80, j3: -36, j4:  29,  j5:  -4,	j6:  69, v0: 0.2 },
+
 			{ pause:	500 },
 			{ f: 0.43, v0: 0.2 },
 			{ pause:	500 },
@@ -316,6 +331,46 @@ class App extends React.Component {
 		
 		this.grasping	= null;		//	Set to name of block when is block
 									//	is grasped.
+
+		//	Joint position and velocity.
+		//		target:		joint position target
+		//		velocity:	radians per second
+		//		delta:		joint position change per simulation step
+		//		current:	joint position
+		this.velocityControl = { 
+			J1:	{ target: 0, velocity: 0.50, delta: 0, current: 0 },
+			J2:	{ target: 0, velocity: 0.50, delta: 0, current: 0 },
+			J3:	{ target: 0, velocity: 0.50, delta: 0, current: 0 },
+			J4:	{ target: 0, velocity: 0.50, delta: 0, current: 0 },
+			J5:	{ target: 0, velocity: 0.50, delta: 0, current: 0 },
+			J6:	{ target: 0, velocity: 0.50, delta: 0, current: 0 } };
+
+		this.runningDeltaTime = [];
+		this.averageDeltaTime = 0;
+
+		this.velocityControl2 = {
+			J1: { move: [], maxVel:  1.00, acl: 10.00, vel: 0, pos: 0 },
+			J2: { move: [], maxVel:  1.00, acl: 10.00, vel: 0, pos: 0 },
+			J3: { move: [], maxVel:  1.00, acl: 10.00, vel: 0, pos: 0 },
+			J4: { move: [], maxVel:  1.00, acl: 10.00, vel: 0, pos: 0 },
+			J5: { move: [], maxVel:  1.00, acl: 10.00, vel: 0, pos: 0 },
+			J6: { move: [], maxVel: 10.00, acl: 40.00, vel: 0, pos: 0 } };
+
+		//	If true then use stepSimulation2().
+		//	Else stepSimulation1().
+		this.bSim2 = true;
+
+		if ( this.bSim2 ) {
+			//	For stepSimulation2().
+			this.kp =   70;			//	Spring
+			this.kd = 1000; }		//	Damping
+		else {
+			//	For stepSimulation1().
+		//	this.kp =  400;			//	Spring
+			this.kp =  600;			//	Spring
+		//	this.kd =   20;			//	Damping
+			this.kd =   60; }		//	Damping
+
 	}	//	constructor()
 
 	makeXYZGUI ( parent, vector3, name, onChangeFn ) {
@@ -593,40 +648,89 @@ class App extends React.Component {
 		folder.add ( kpkdGUIHelper, 'k', 0, 2000,  1 ).name ( 'Kd' );
 	}	//	createKpKdControls()
 
+	createJointVelocityAccelerationControls() {
+		const sW = 'App createJointVelocityAccelerationControls()';
+		let folder = this.gui.addFolder ( 'Joint Velocity, Acceleration' );
+		folder.open();
+		let vaGUIHelper = null;
+		let ctrl = null;
+
+		vaGUIHelper = new VAGUIHelper ( this, 'velocity' );
+		ctrl = folder.add ( vaGUIHelper, 'va', 0.1, 10, 0.1 ).name ( 'Velocity' );
+		this.jointVA['velocity'].ctrl = ctrl;
+
+
+		vaGUIHelper = new VAGUIHelper ( this, 'acceleration' );
+		ctrl = folder.add ( vaGUIHelper, 'va', 0.1, 10, 0.1 ).name ( 'Acceleration' );
+		this.jointVA['acceleration'].ctrl = ctrl;
+
+	}	//	createJointVelocityAccelerationControls()
+		
 	createJointControls() {
+		const sW = 'App createJointControls()';
 		let folder = this.gui.addFolder ( 'Joint Targets' );
 		folder.open();
 		let jointGUIHelper = null;
 		let ctrl = null;
+		let self = this;
+
+		function updateTarget ( v ) {
+			console.log ( sW + ' updateTarget(): ' + this.object.joint
+											+ '  ' + JSON.stringify ( v ) );
+		//	let vc = self.velocityControl[this.object.joint];
+		//	vc.target = v * Math.PI / 180;
+			let vc = self.velocityControl2[this.object.joint];
+			if ( vc.move.length === 0 ) {
+				vc.move.push ( { tgtPos:	v * Math.PI / 180,
+								 pos:		vc.pos,
+								 stop:		false } ); }
+			else {
+				let mv = vc.move[0];
+			//	//	Decelerate from the current position.
+			//	let adt = this.averageDeltaTime;
+			//	//	Approximite distance will travel during deceleration.
+			//	let d = vc.acl * adt * adt;
+			//	if ( mv.tgtPos > mv.pos ) {
+			//		mv.tgtPos = mv.tgtPos + d; }
+			//	else {
+			//		mv.tgtPos = mv.tgtPos - d; } }
+				mv.stop = true; }
+		}	//	updateTarget()
 
 		this.jt['J1'] = { axis:	'y', value: 0, ctrl: null };
 		jointGUIHelper = new JointGUIHelper ( this, 'J1' );
-		ctrl = folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J1' );
+		ctrl = folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J1' )
+				.onChange ( updateTarget );
 		this.jt['J1'].ctrl = ctrl;
 
 		this.jt['J2'] = { axis:	'z', value: 0 };
 		jointGUIHelper = new JointGUIHelper ( this, 'J2' );
-		ctrl = folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J2' );
+		ctrl = folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J2' )
+				.onChange ( updateTarget );
 		this.jt['J2'].ctrl = ctrl;
 
 		this.jt['J3'] = { axis:	'z', value: 0 };
 		jointGUIHelper = new JointGUIHelper ( this, 'J3' );
-		ctrl = folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J3' );
+		ctrl = folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J3' )
+				.onChange ( updateTarget );
 		this.jt['J3'].ctrl = ctrl;
 
 		this.jt['J4'] = { axis:	'z', value: 0 };
 		jointGUIHelper = new JointGUIHelper ( this, 'J4' );
-		ctrl = folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J4' );
+		ctrl = folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J4' )
+				.onChange ( updateTarget );
 		this.jt['J4'].ctrl = ctrl;
 
 		this.jt['J5'] = { axis:	'y', value: 0 };
 		jointGUIHelper = new JointGUIHelper ( this, 'J5' );
-		ctrl = folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J5' );
+		ctrl = folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J5' )
+				.onChange ( updateTarget );
 		this.jt['J5'].ctrl = ctrl;
 
 		this.jt['J6'] = { axis:	'z', value: 0 };
 		jointGUIHelper = new JointGUIHelper ( this, 'J6' );
-		ctrl = folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J6' );
+		ctrl = folder.add ( jointGUIHelper, 'j', -180, 180, 1 ).name ( 'J6' )
+				.onChange ( updateTarget );
 		this.jt['J6'].ctrl = ctrl;
 	}	//	createJointControls()
 	
@@ -822,7 +926,7 @@ class App extends React.Component {
 	createBlock ( name, parent, w, l, h, color, dropFrom ) {
 		if ( this.bHiResDynamicsEnabled ) {
 			let p = dropFrom ? dropFrom : this.dropBlocksFrom;
-			dynamics2.createBlock ( name, p.x, p.y, p.z, w, l, h ); }
+			dynamics2.createBlock ( this.bSim2, name, p.x, p.y, p.z, w, l, h ); }
 		const geo = new THREE.BoxGeometry ( w, h, l );
 		const mat = new THREE.MeshPhongMaterial ( 
 			{ color: (typeof color === 'string') ? color: '#683' } );
@@ -1089,13 +1193,13 @@ class App extends React.Component {
 	
 	scriptStatement ( next ) {
 		const sW = 'App scriptStatement()';
-		let j1 = this.jt['J1'].ctrl;
-		let j2 = this.jt['J2'].ctrl;
-		let j3 = this.jt['J3'].ctrl;
-		let j4 = this.jt['J4'].ctrl;
-		let j5 = this.jt['J5'].ctrl;
-		let j6 = this.jt['J6'].ctrl;
-		let f  = this.ee['Finger'].ctrl;
+		let j1Ctrl = this.jt['J1'].ctrl;
+		let j2Ctrl = this.jt['J2'].ctrl;
+		let j3Ctrl = this.jt['J3'].ctrl;
+		let j4Ctrl = this.jt['J4'].ctrl;
+		let j5Ctrl = this.jt['J5'].ctrl;
+		let j6Ctrl = this.jt['J6'].ctrl;
+		let fCtrl  = this.ee['Finger'].ctrl;
 
 		this.grab = null;
 
@@ -1104,7 +1208,8 @@ class App extends React.Component {
 			this.v0CB = null;
 			return; }
 		let s = this.script[this.iScript];
-		console.log ( JSON.stringify ( s ) );
+		console.log (   'is ' + this.iScript 
+					  + '   ' + JSON.stringify ( s ) );
 		if ( s.camera ) {
 			this.moveCamera ( s.camera, next );
 			this.v0CB = null;
@@ -1132,19 +1237,19 @@ class App extends React.Component {
 			this.iScript += 1;
 			return; }
 		if ( typeof s.f === 'number' ) {
-			f.setValue ( s.f ); }
+			fCtrl.setValue ( s.f ); }
 		if ( typeof s.j1 === 'number' ) {
-			j1.setValue ( s.j1 ); }
+			j1Ctrl.setValue ( s.j1 ); }
 		if ( typeof s.j2 === 'number' ) {
-			j2.setValue ( s.j2 ); }
+			j2Ctrl.setValue ( s.j2 ); }
 		if ( typeof s.j3 === 'number' ) {
-			j3.setValue ( s.j3 ); }
+			j3Ctrl.setValue ( s.j3 ); }
 		if ( typeof s.j4 === 'number' ) {
-			j4.setValue ( s.j4 ); }
+			j4Ctrl.setValue ( s.j4 ); }
 		if ( typeof s.j5 === 'number' ) {
-			j5.setValue ( s.j5 ); }
+			j5Ctrl.setValue ( s.j5 ); }
 		if ( typeof s.j6 === 'number' ) {
-			j6.setValue ( s.j6 ); }
+			j6Ctrl.setValue ( s.j6 ); }
 		this.v0CB = { is: this.iScript, v0: s.v0, cb: next } 
 		this.jvAbsMax = [];
 		this.iScript += 1;
@@ -1633,9 +1738,113 @@ class App extends React.Component {
 
 
 	
-		dynamics2.createMultiBody ( config ); 
+		dynamics2.createMultiBody ( config, this.bSim2 ); 
 
 	}	//	getLinks()
+
+	calculateRunningAverageDeltaTime ( deltaTime ) {
+		if ( this.runningDeltaTime.length >= 5 ) {
+			this.runningDeltaTime = this.runningDeltaTime.slice ( 1 ); }
+		this.runningDeltaTime.push ( deltaTime );
+		let sum = 0;
+		this.runningDeltaTime.forEach ( dt => sum += dt );
+		this.averageDeltaTime = sum / this.runningDeltaTime.length;
+	}	//	calculateRunningAverageDeltaTime()
+
+	jointNextPosition ( deltaTime, joint ) {
+		let vc = this.velocityControl[joint];
+		vc.delta = vc.velocity * deltaTime;
+		if ( vc.target < vc.current ) {
+			vc.delta = -vc.delta; }
+		if ( Math.abs ( vc.delta ) > Math.abs ( vc.target - vc.current ) ) {
+			vc.delta = vc.target - vc.current; }
+		vc.current += vc.delta;
+		return vc.current;
+	}	//	jointNextPosition()
+
+	jointNextPosition2 ( joint ) {
+
+		//	J1: { move: [], maxVel: 1.00, acl: 1.00, vel: 0, pos: 0 },
+		//	
+		//	Each move is like -
+		//		{ tgtPos:	,
+		//		  pos:		,
+		//		  stop:		  }
+
+		let vc = this.velocityControl2[joint];
+
+		let mv = null;
+		let ad = null;
+
+		while ( true ) {
+			if ( vc.move.length === 0 ) {
+				break; }
+			mv = vc.move[0];
+			ad = Math.abs ( mv.tgtPos - mv.pos );	//	distance remaining
+			if ( ad !== 0 ) {
+				break; }
+			vc.move = vc.move.slice ( 1 ); 
+			mv = null; }
+
+		if ( ! mv ) {
+			return vc.pos; }
+		
+		let vFctr = this.jointVA['velocity'].value;
+		let aFctr = this.jointVA['acceleration'].value;
+
+		let adt = this.averageDeltaTime;
+		let av = Math.abs ( vc.vel );				//	current velocity
+
+		if ( av > 0 ) {
+			//	Time remainin to get to target at current velocity.
+			let dt = ad / av;
+			//	Acceleeration time.
+			let at = vc.vel / vc.acl;
+			//	If time to decelerate is greater than remaining distance
+			//	time then decelerate.
+			if ( (at >= dt) || mv.stop ) {
+				let dv = aFctr * vc.acl * adt;
+				if ( vc.vel - dv < 0 ) {
+					vc.vel = 0; }
+				else {
+					vc.vel -= dv; } }
+			else {
+				//	Accelerate?
+				if ( av < vc.maxVel ) {
+					vc.vel += aFctr * vc.acl * adt; } } }
+		else {
+			//	Current velocity is 0.  Must be starting move.
+			vc.vel = aFctr * vc.acl * adt; }
+
+		if ( vc.vel > vc.maxVel ) {
+			vc.vel = vc.maxVel; }
+
+		let d = vFctr * vc.vel * adt;
+
+		if ( d === 0 ) {
+			vc.vel = 0;
+			if ( mv.stop ) {
+				mv.tgtPos = mv.pos; } 
+			else {
+				mv.pos = mv.tgtPos; } }
+		else {
+			if ( mv.tgtPos > mv.pos ) {
+				mv.pos += d;
+				if ( mv.pos >= mv.tgtPos ) {
+					vc.vel = 0;
+					mv.pos = mv.tgtPos; } }
+			else {
+				mv.pos -= d;
+				if ( mv.pos <= mv.tgtPos ) {
+					vc.vel = 0;
+					mv.pos = mv.tgtPos; } } }
+
+		vc.pos = mv.pos;
+
+		return mv.pos;
+
+	}	//	jointNextPosition2()
+
 
 	render3D ( time ) {
 		const sW = 'App render3D()';
@@ -1645,15 +1854,39 @@ class App extends React.Component {
 								 / this.canvas.clientHeight;
 			this.camera.updateProjectionMatrix(); }
 
-		let deltaTime = this.clock.getDelta();
+		let deltaTime = this.clock.getDelta();		//	seconds
+
+		this.calculateRunningAverageDeltaTime ( deltaTime );
 
 		let qd = [];		//	Joint target values.
-		qd.push ( this.jt['J1'].value );
-		qd.push ( this.jt['J2'].value );
-		qd.push ( this.jt['J3'].value );
-		qd.push ( this.jt['J4'].value );
-		qd.push ( this.jt['J5'].value );
-		qd.push ( this.jt['J6'].value );
+	
+	//	qd.push ( this.jt['J1'].value );
+	//	qd.push ( this.jt['J2'].value );
+	//	qd.push ( this.jt['J3'].value );
+	//	qd.push ( this.jt['J4'].value );
+	//	qd.push ( this.jt['J5'].value );
+	//	qd.push ( this.jt['J6'].value );
+//		let vc = this.velocityControl;
+//		vc.j1Delta  = vc.j1Vel * deltaTime;
+//		if ( vc.target < vc.j1 ) {
+//			vc.j1Delta = -vc.j1Delta; }
+//		if ( Math.abs ( vc.j1Delta ) > Math.abs ( vc.target - vc.j1 ) ) {
+//			vc.j1Delta = vc.target - vc.j1; }
+//
+//		vc.j1 += vc.j1Delta;
+		//	qd.push ( vc.j1 );
+	//	qd.push ( this.jointNextPosition ( deltaTime, 'J1' ) );
+	//	qd.push ( this.jointNextPosition ( deltaTime, 'J2' ) );
+	//	qd.push ( this.jointNextPosition ( deltaTime, 'J3' ) );
+	//	qd.push ( this.jointNextPosition ( deltaTime, 'J4' ) );
+	//	qd.push ( this.jointNextPosition ( deltaTime, 'J5' ) );
+	//	qd.push ( this.jointNextPosition ( deltaTime, 'J6' ) );
+		qd.push ( this.jointNextPosition2 ( 'J1' ) );
+		qd.push ( this.jointNextPosition2 ( 'J2' ) );
+		qd.push ( this.jointNextPosition2 ( 'J3' ) );
+		qd.push ( this.jointNextPosition2 ( 'J4' ) );
+		qd.push ( this.jointNextPosition2 ( 'J5' ) );
+		qd.push ( this.jointNextPosition2 ( 'J6' ) );
 
 		//	Need to specify the moving finger position. Just push it on
 		//	qd[].
@@ -1666,10 +1899,17 @@ class App extends React.Component {
 		let blocks = [];
 
 		if ( this.bHiResDynamicsEnabled && this.bHiResStepSim ) { 
-			dynamics2.stepSimulation2 ( deltaTime, qd, jc,
-									    this.kp / 1000, 
-										this.kd / 1000, 
-										jv, jt, ground, blocks ); }
+			if ( this.bSim2 ) {
+				dynamics2.stepSimulation2 ( deltaTime, qd,       jc,
+											this.kp / 1000, 
+											this.kd / 1000, 
+											jv, jt, ground, blocks ); }
+			else {
+				dynamics2.stepSimulation1 ( deltaTime, qd, true, jc,
+											this.kp,
+											this.kd,
+											jv, jt, ground, blocks ); } }
+		
 
 		if ( jc.length === 0 ) {
 			jc.splice ( 0, 0, 0, 0, 0, 0, 0, 0, 0 );
@@ -1923,6 +2163,10 @@ class App extends React.Component {
 				this.getLinks ( o.obj );
 				break;
 
+			case 'add-to-scene-stl':
+				this.scene.add ( o.mesh );
+				break;
+
 			case 'show-low-res':
 				sim.J0.visible = o.bShow;
 				break;
@@ -2029,6 +2273,8 @@ class App extends React.Component {
 		this.createFingerPadControls();
 		
 		this.createKpKdControls();			//	Joint spring and damper
+
+		this.createJointVelocityAccelerationControls();
 
 		this.createJointControls();
 		

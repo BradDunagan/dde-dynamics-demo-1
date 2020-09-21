@@ -78,8 +78,9 @@ let Dexter = ( function() {
 	dexter.LINK4_MASS  =	0.5;
 	dexter.LINK5_MASS  =	0.5;
 //	dexter.LINK6_MASS  =	0.1;
-	dexter.LINK6_MASS  =	2.0;
-	dexter.FINGER_MASS =	0.04; 
+	dexter.LINK6_MASS  =	0.2;
+//	dexter.FINGER_MASS =	0.04; 
+	dexter.FINGER_MASS =	0.00; 
 
 	dexter.HiRes =			{ base:		null,
 							  link1:	null,

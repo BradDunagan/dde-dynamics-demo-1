@@ -179,7 +179,7 @@ let dynamics2 = ( function() {
 		blk.colsn.setWorldTransform ( tr );
 	}	//	setBlockColliderWorldTransform()
 	
-	self.createBlock = function ( name, x, y, z, w, l, h ) {
+	self.createBlock = function ( bSim2, name, x, y, z, w, l, h ) {
 
 		let extents = new Ammo.btVector3 ( w/2, h/2, l/2 );
 		let blockShape = new Ammo.btBoxShape ( extents );
@@ -199,7 +199,7 @@ let dynamics2 = ( function() {
 		let orgn = new Ammo.btVector3 ( x, y, z );
 		blockTransform.setOrigin ( orgn );
 
-		let mass = 1;
+		let mass = 0.1;
 		let inertiaDiag = new Ammo.btVector3 ( 0, 0, 0 );
 		blockShape.calculateLocalInertia ( mass, inertiaDiag );
 
@@ -243,6 +243,14 @@ let dynamics2 = ( function() {
 										   inertiaDiag );
 		block.setDamping ( 0.1,		//	linear
 						   0.1 );	//	angular
+
+		//	Setting lowwer friction helps link6 not being turned on contact.
+		//	There is a contactStiffness setting also. ?  In btCollisionObject.
+		if ( bSim2 ) {
+			block.setFriction ( 0.3 ); }	//	default is 0.5
+		else {
+			block.setFriction ( 0.1 ); }
+
 		world.addRigidBody ( block );
 
 
@@ -350,7 +358,7 @@ let dynamics2 = ( function() {
 		Ammo.destroy ( zero );
 	}	//	positionBlock()
 
-	self.createMultiBody = function ( config ) {
+	self.createMultiBody = function ( config, bSim2 ) {
 		const sW = 'dynamics2 createMultiBody()';
 
 	//	numLinks = 6;		//	The moving finger pad is part of the compound
@@ -1107,7 +1115,9 @@ let dynamics2 = ( function() {
 		else {
 			inverseModel = id_creator.CreateMultiBodyTree ( id_creator ); }
 
-		self.createJointMotors();
+		//	For stepSimulation2().
+		if ( bSim2 ) {
+			self.createJointMotors(); }
 
 		return multiBody;
 
@@ -1143,22 +1153,53 @@ let dynamics2 = ( function() {
 
 	}	//	createJointMotors()
 
+	function getGroundAndBlocks ( ground, blocks ) {
+		if ( self.ground ) {
+		//	ground.ammoQ = self.ground.getWorldToBaseRot();
+		//	ground.ammoP = self.ground.getBasePos(); }
+			ground.ammoQ = self.ground.getOrientation();
+			ground.ammoP = self.ground.getCenterOfMassPosition(); }
+			
+		if ( self.blocks ) {
+			self.blocks.forEach ( b => {
+			//	self.setBlockColliderWorldTransform ( b );
+				let o  = b.block.getOrientation();
+				let bo = new Ammo.btQuaternion ( o.x(), o.y(), o.z(), o.w() );
+				blocks.push ( { name:	b.name,
+							//	ammoQ:	b.block.getWorldToBaseRot(),
+							//	ammoP:	b.block.getBasePos() } );
+								ammoQ:	bo,
+								ammoP:	b.block.getCenterOfMassPosition() } );
+			} ); }
+	}	//	getGroundAndBlocks()
+
+	function setFingerPosition ( pos ) {
+		if ( ! multiBody ) {
+			return; }
+		//	Set the position of the fixed link.
+		let c7 = colliders.find ( c => c.name === 'finger' );
+		if ( c7 ) {
+			let x = c7.x + pos;
+			multiBody.getLink ( 6 ).setX ( x ); } 
+	}	//	setFingerPosition()
+
 	//	This (including the comments) is pretty much copied from Bullet3's 
 	//	InverseDynamicsExample::stepSimulation().
 	//
 	//	The only major difference from the example is that all the parameters
 	//	except deltaTime are of the class instance in the example.
 	//
-	self.stepSimulation = function ( deltaTime,
-									 qd,			//	joint target values
-									 useInverseModel,
-									 jc,			//	joint current values
-									 kp, kd,
-									 jv,			//	joint velocities
-									 jt,			//	joint torques
-									 ground,
-									 blocks ) {
+	self.stepSimulation1 = function ( deltaTime,
+									  qd,			//	joint target values
+									  useInverseModel,
+									  jc,			//	joint current values
+									  kp, kd,
+									  jv,			//	joint velocities
+									  jt,			//	joint torques
+									  ground,
+									  blocks ) {
 
+		const sW  = 'dynamics2 stepSimulation1()';
 		let num_dofs	= 0;
 		let nu			= null;
 		let qdot		= null;
@@ -1173,6 +1214,7 @@ let dynamics2 = ( function() {
 
 		if ( multiBody ) {
 			num_dofs = multiBody.getNumDofs();
+			setFingerPosition ( qd[6] ); 
 			
 			nu			= new Ammo.vecx ( num_dofs );
 			qdot		= new Ammo.vecx ( num_dofs );
@@ -1193,10 +1235,12 @@ let dynamics2 = ( function() {
 				q.set ( dof, multiBody.getJointPos ( dof ) );
 				qdot.set ( dof, multiBody.getJointVel ( dof ) );
 
-				const qd_dot = 0;
-				const qd_ddot = 0;
+			//	const qd_dot = 0;
+			//	const qd_ddot = 0;
 			//	const qd_dot  = 1.0;
 			//	const qd_ddot = 0.1;
+				const qd_dot  =  qd[dof] - q.get ( dof );
+				const qd_ddot =  qd_dot  - qdot.get ( dof );
 
 				//	pd_control is either desired joint torque for pd control,
 				//	or the feedback contribution to nu.
@@ -1217,6 +1261,9 @@ let dynamics2 = ( function() {
 			//	if ( Math.abs ( a ) > 10 ) {
 			//		a /= 5; }
 			//	a /= 10;
+			//	if ( dof === 5 ) {
+			//		console.log ( sW + ': a ' + a + '  qd_dot ' + qd_dot ); 
+			//		a *= (qd_dot * 10); }
 				nu.set ( dof,  a );
 			}
 
@@ -1269,7 +1316,8 @@ let dynamics2 = ( function() {
 			// 	todo(thomas) check that this is correct:
 			//	want to advance by 10ms, with 1ms timesteps
 		//	world.stepSimulation ( 0.001, 0 );
-			world.stepSimulation ( 1 / 60, 1 ); }
+		//	world.stepSimulation ( 1 / 60, 1 ); }
+			world.stepSimulation ( deltaTime, 1 ); }
 
 		if ( multiBody ) {
 			multiBody.forwardKinematics();
@@ -1277,17 +1325,8 @@ let dynamics2 = ( function() {
 			for ( let dof = 0; dof < num_dofs; dof++ ) {
 				jc.push ( multiBody.getJointPos ( dof ) ); } }
 
-		if ( self.ground ) {
-			ground.ammoQ = self.ground.getWorldToBaseRot();
-			ground.ammoP = self.ground.getBasePos(); }
-			
-		if ( self.blocks ) {
-			self.blocks.forEach ( b => {
-				blocks.push ( { name:	b.name,
-								ammoQ:	b.block.getWorldToBaseRot(),
-								ammoP:	b.block.getBasePos() } );
-			} ); }
-
+		getGroundAndBlocks ( ground, blocks );
+		
 		if ( multiBody ) {
 			Ammo.destroy ( nu );
 			Ammo.destroy ( qdot );
@@ -1295,7 +1334,7 @@ let dynamics2 = ( function() {
 			Ammo.destroy ( joint_force );
 			Ammo.destroy ( pd_control ); }
 
-	};	//	stepSimulation()
+	};	//	stepSimulation1()
 
 
 	self.stepSimulation2 = function ( deltaTime,
@@ -1316,13 +1355,7 @@ let dynamics2 = ( function() {
 
 		if ( multiBody ) {
 			num_dofs = multiBody.getNumDofs(); 
-
-			//	Set the position of the fixed link.
-		//	let x = (op.x / 10) - (ppwl.x / 10);
-			let c7 = colliders.find ( c => c.name === 'finger' );
-			if ( c7 ) {
-				let x = c7.x  + qd[6];
-				multiBody.getLink ( 6 ).setX ( x ); } }
+			setFingerPosition ( qd[6] ); }
 			
 
 		if ( jointMotors ) {
@@ -1360,23 +1393,8 @@ let dynamics2 = ( function() {
 				jv.push ( multiBody.getJointVel ( dof ) );
 				jt.push ( multiBody.getJointTorque ( dof ) ); } }
 
-		if ( self.ground ) {
-		//	ground.ammoQ = self.ground.getWorldToBaseRot();
-		//	ground.ammoP = self.ground.getBasePos(); }
-			ground.ammoQ = self.ground.getOrientation();
-			ground.ammoP = self.ground.getCenterOfMassPosition(); }
-			
-		if ( self.blocks ) {
-			self.blocks.forEach ( b => {
-			//	self.setBlockColliderWorldTransform ( b );
-				let o  = b.block.getOrientation();
-				let bo = new Ammo.btQuaternion ( o.x(), o.y(), o.z(), o.w() );
-				blocks.push ( { name:	b.name,
-							//	ammoQ:	b.block.getWorldToBaseRot(),
-							//	ammoP:	b.block.getBasePos() } );
-								ammoQ:	bo,
-								ammoP:	b.block.getCenterOfMassPosition() } );
-			} ); }
+		getGroundAndBlocks ( ground, blocks );
+		
 	}	//	stepSimulation2()
 
 

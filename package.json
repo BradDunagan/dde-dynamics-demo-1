@@ -9,9 +9,10 @@
     "dat.gui": "^0.7.7",
     "react": "^16.13.1",
     "react-dom": "^16.13.1",
-    "react-scripts": "3.4.1",
+    "react-scripts": "^3.4.3",
     "react-three-fiber": "^4.2.17",
-    "three": "^0.118.3"
+    "three": "^0.118.3",
+    "three-stl-loader": "^1.0.6"
   },
   "scripts": {
     "start": "react-scripts start",
